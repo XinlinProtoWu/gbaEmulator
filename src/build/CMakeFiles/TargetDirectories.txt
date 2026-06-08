@@ -1,0 +1,3 @@
+/home/xinuwu/src/gbaEmulator/src/build/CMakeFiles/GBA_Emulator.dir
+/home/xinuwu/src/gbaEmulator/src/build/CMakeFiles/edit_cache.dir
+/home/xinuwu/src/gbaEmulator/src/build/CMakeFiles/rebuild_cache.dir
