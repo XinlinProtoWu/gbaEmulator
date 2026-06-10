@@ -1,7 +1,7 @@
 file(REMOVE_RECURSE
   "CMakeFiles/GBA_Emulator.dir/link.d"
-  "CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o"
-  "CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o.d"
+  "CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o"
+  "CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o.d"
   "GBA_Emulator"
   "GBA_Emulator.pdb"
 )

@@ -129,29 +129,29 @@ GBA_Emulator/fast:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/GBA_Emulator.dir/build.make CMakeFiles/GBA_Emulator.dir/build
 .PHONY : GBA_Emulator/fast
 
-gbaProcessor.o: gbaProcessor.cpp.o
-.PHONY : gbaProcessor.o
+ARM7TDMI.o: ARM7TDMI.cpp.o
+.PHONY : ARM7TDMI.o
 
 # target to build an object file
-gbaProcessor.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/GBA_Emulator.dir/build.make CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o
-.PHONY : gbaProcessor.cpp.o
+ARM7TDMI.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GBA_Emulator.dir/build.make CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o
+.PHONY : ARM7TDMI.cpp.o
 
-gbaProcessor.i: gbaProcessor.cpp.i
-.PHONY : gbaProcessor.i
+ARM7TDMI.i: ARM7TDMI.cpp.i
+.PHONY : ARM7TDMI.i
 
 # target to preprocess a source file
-gbaProcessor.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/GBA_Emulator.dir/build.make CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.i
-.PHONY : gbaProcessor.cpp.i
+ARM7TDMI.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GBA_Emulator.dir/build.make CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.i
+.PHONY : ARM7TDMI.cpp.i
 
-gbaProcessor.s: gbaProcessor.cpp.s
-.PHONY : gbaProcessor.s
+ARM7TDMI.s: ARM7TDMI.cpp.s
+.PHONY : ARM7TDMI.s
 
 # target to generate assembly for a file
-gbaProcessor.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/GBA_Emulator.dir/build.make CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.s
-.PHONY : gbaProcessor.cpp.s
+ARM7TDMI.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/GBA_Emulator.dir/build.make CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.s
+.PHONY : ARM7TDMI.cpp.s
 
 # Help Target
 help:
@@ -162,9 +162,9 @@ help:
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
 	@echo "... GBA_Emulator"
-	@echo "... gbaProcessor.o"
-	@echo "... gbaProcessor.i"
-	@echo "... gbaProcessor.s"
+	@echo "... ARM7TDMI.o"
+	@echo "... ARM7TDMI.i"
+	@echo "... ARM7TDMI.s"
 .PHONY : help
 
 

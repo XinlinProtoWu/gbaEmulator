@@ -2,7 +2,7 @@ GBA_Emulator: \
   /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/../../../../lib/Scrt1.o \
   /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/../../../../lib/crti.o \
   /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/crtbeginS.o \
-  CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o \
+  CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o \
   /usr/lib/libSDL2main.a \
   /usr/lib/libSDL2-2.0.so.0.3200.68 \
   /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/../../../../lib/libstdc++.so \
@@ -43,7 +43,7 @@ GBA_Emulator: \
 
 /usr/lib/gcc/x86_64-pc-linux-gnu/16.1.1/crtbeginS.o:
 
-CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o:
+CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o:
 
 /usr/lib/libSDL2main.a:
 

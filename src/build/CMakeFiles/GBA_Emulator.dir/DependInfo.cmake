@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/home/xinuwu/src/gbaEmulator/src/gbaProcessor.cpp" "CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o" "gcc" "CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o.d"
+  "/home/xinuwu/src/gbaEmulator/src/ARM7TDMI.cpp" "CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o" "gcc" "CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o.d"
   "" "GBA_Emulator" "gcc" "CMakeFiles/GBA_Emulator.dir/link.d"
   )
 

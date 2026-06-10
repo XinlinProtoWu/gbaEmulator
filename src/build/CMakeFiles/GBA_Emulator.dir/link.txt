@@ -1,1 +1,1 @@
-/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/GBA_Emulator.dir/link.d CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o -o GBA_Emulator  /usr/lib/libSDL2main.a /usr/lib/libSDL2-2.0.so.0.3200.68
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/GBA_Emulator.dir/link.d CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o -o GBA_Emulator  /usr/lib/libSDL2main.a /usr/lib/libSDL2-2.0.so.0.3200.68

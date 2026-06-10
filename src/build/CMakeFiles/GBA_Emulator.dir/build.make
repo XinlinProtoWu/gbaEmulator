@@ -72,28 +72,28 @@ include CMakeFiles/GBA_Emulator.dir/flags.make
 CMakeFiles/GBA_Emulator.dir/codegen:
 .PHONY : CMakeFiles/GBA_Emulator.dir/codegen
 
-CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o: CMakeFiles/GBA_Emulator.dir/flags.make
-CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o: /home/xinuwu/src/gbaEmulator/src/gbaProcessor.cpp
-CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o: CMakeFiles/GBA_Emulator.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/xinuwu/src/gbaEmulator/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o -MF CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o.d -o CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o -c /home/xinuwu/src/gbaEmulator/src/gbaProcessor.cpp
+CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o: CMakeFiles/GBA_Emulator.dir/flags.make
+CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o: /home/xinuwu/src/gbaEmulator/src/ARM7TDMI.cpp
+CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o: CMakeFiles/GBA_Emulator.dir/compiler_depend.ts
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/home/xinuwu/src/gbaEmulator/src/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o -MF CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o.d -o CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o -c /home/xinuwu/src/gbaEmulator/src/ARM7TDMI.cpp
 
-CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.i: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.i"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/xinuwu/src/gbaEmulator/src/gbaProcessor.cpp > CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.i
+CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.i: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.i"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /home/xinuwu/src/gbaEmulator/src/ARM7TDMI.cpp > CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.i
 
-CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.s: cmake_force
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.s"
-	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/xinuwu/src/gbaEmulator/src/gbaProcessor.cpp -o CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.s
+CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.s: cmake_force
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.s"
+	/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /home/xinuwu/src/gbaEmulator/src/ARM7TDMI.cpp -o CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.s
 
 # Object files for target GBA_Emulator
 GBA_Emulator_OBJECTS = \
-"CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o"
+"CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o"
 
 # External object files for target GBA_Emulator
 GBA_Emulator_EXTERNAL_OBJECTS =
 
-GBA_Emulator: CMakeFiles/GBA_Emulator.dir/gbaProcessor.cpp.o
+GBA_Emulator: CMakeFiles/GBA_Emulator.dir/ARM7TDMI.cpp.o
 GBA_Emulator: CMakeFiles/GBA_Emulator.dir/build.make
 GBA_Emulator: CMakeFiles/GBA_Emulator.dir/compiler_depend.ts
 GBA_Emulator: /usr/lib/libSDL2main.a
