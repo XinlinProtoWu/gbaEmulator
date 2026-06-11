@@ -3,7 +3,8 @@
 #include <array>
 #include <cstdint>
 
-enum class ProcessorMode : uint8_t {
+// ARM7TDMI Operating Modes (Stored in the lower 5 bits of CPSR)
+enum class CpuMode : uint8_t {
   User = 0x10,
   FIQ = 0x11,
   IRQ = 0x12,
@@ -13,17 +14,48 @@ enum class ProcessorMode : uint8_t {
   System = 0x1F
 };
 
-struct ARM7TDMI {
-  // 31 physical registers (R0-R14, plus mode-specific banked registers)
-  std::array<uint32_t, 31> regs;
-  uint32_t pc;   // Program Counter (R15)
-  uint32_t cpsr; // Current Program Status Register
+class ARM7TDMI {
+public:
+  ARM7TDMI();
+  ~ARM7TDMI() = default;
 
-  // Helper to map logical R0-R15 to physical regs based on mode
-  uint32_t &getRegister(int logicalReg);
+  // System Interface
+  void reset();
+  void step();
 
-  // Status flag helpers
-  bool getFlag(int bit);
-  void setFlag(int bit, bool value);
+  // Debugger and State Access
+  uint32_t getLogicalRegister(int index) const;
+  uint32_t getCPSR() const;
+
+private:
+  // Processor State
+  // 31 physical registers: 16 user + 15 banked registers
+  // R13 is SP, R15 is PC
+  std::array<uint32_t, 31> physicalRegisters;
+
+  // Status registers
+  uint32_t cpsr;
+  uint8_t currentMode;
+  // 5 Bankes SPSRs (FIQ, IRQ, Supervisor, Abort, Undefined)
+  std::array<uint32_t, 5> spsr;
+
+  // 3 stage instruction pipeline
+  // Instruction A is actively modifying registers or memory
+  // pipeline[0]: Instruction B is being translated by the CPU for next steps
+  // pipeline[1]: Instruction C is being physically read from the GBA memory bus
+  std::array<uint32_t, 2> pipeline;
+
+  // Translate the "virtual" register index to its actual physical index
+  uint8_t getPhysicalRegisterIndex(int logicalIndex) const;
+
+  // Fetch a reference to the current mode's SPSR
+  // Throw an exception or return a dummy reference if in user/system mode
+  uint32_t &getCurrentSPSR();
+  uint8_t getSPSRIndex();
+  void flushPipeline();
+  void fillPipeline();
+
+  void executeARM(uint32_t instruction);
+  void executeTHUMB(uint32_t instruction);
 };
 #endif // !PROCESSOR
