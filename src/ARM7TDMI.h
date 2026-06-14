@@ -3,6 +3,8 @@
 #include <array>
 #include <cstdint>
 
+// Forward declaration of Memory class
+class MemoryBus;
 // ARM7TDMI Operating Modes (Stored in the lower 5 bits of CPSR)
 enum class CpuMode : uint8_t {
   User = 0x10,
@@ -16,7 +18,7 @@ enum class CpuMode : uint8_t {
 
 class ARM7TDMI {
 public:
-  ARM7TDMI();
+  ARM7TDMI(MemoryBus &bus);
   ~ARM7TDMI() = default;
 
   // System Interface
@@ -28,6 +30,7 @@ public:
   uint32_t getCPSR() const;
 
 private:
+  MemoryBus &memoryBus;
   // Processor State
   // 31 physical registers: 16 user + 15 banked registers
   // R13 is SP, R15 is PC
