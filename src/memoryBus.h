@@ -16,22 +16,21 @@ public:
   uint32_t read32(uint32_t address) const;
 
   // Write
-  uint8_t write8(uint32_t address) const;
-  uint16_t write16(uint32_t address) const;
-  uint32_t write32(uint32_t address) const;
+  void write8(uint32_t address, uint8_t value);
+  void write16(uint32_t address, uint16_t value);
+  void write32(uint32_t address, uint32_t value);
 
 private:
   // GBA Memory regions
-  // Arrays/vectors will be implemented for these regions [cite: 164]
-  std::array<uint8_t, 0x4000> bios;       // BIOS (System ROM) [cite: 164]
-  std::array<uint8_t, 0x40000> wram;      // On-board Work RAM [cite:164]
-  std::array<uint8_t, 0x8000> iram;       // Internal Work RAM [cite: 164]
-  std::array<uint8_t, 0x400> ioRegisters; // IO Registers [cite: 164]
-  std::array<uint8_t, 0x18000> vram;      // Video RAM [cite: 164]
-  std::array<uint8_t, 0x400> oam;         // Object Attribute Memory
-                                          // for sprites [cite: 164]
+  std::array<uint8_t, 0x4000> bios;       // BIOS (System ROM)
+  std::array<uint8_t, 0x40000> wram;      // On-board Work RAM
+  std::array<uint8_t, 0x8000> iram;       // Internal Work RAM
+  std::array<uint8_t, 0x400> ioRegisters; // IO Registers
+  std::array<uint16_t, 512> paletteRam;   // 1KB (512 entries of 16-bit colors)
+  std::array<uint8_t, 0x18000> vram;      // Video RAM
+  std::array<uint8_t, 0x400> oam;         // Object Attribute Memory for sprites
   std::vector<uint8_t> gamePakRom; // Game Pak ROM (dynamically sized based on
-                                   // the game) [cite: 164]
+                                   // the game)
 };
 
 #endif // !MEMORY_BUS_H
