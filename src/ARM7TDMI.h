@@ -61,4 +61,4 @@ private:
   void executeARM(uint32_t instruction);
   void executeTHUMB(uint32_t instruction);
 };
-#endif // !PROCESSOR
+#endif // !ARM_7_TDMI_H
