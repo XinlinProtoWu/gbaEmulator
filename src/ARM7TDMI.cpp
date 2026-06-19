@@ -145,3 +145,109 @@ void ARM7TDMI::fillPipeline() {
   }
   physicalRegisters[getPhysicalRegisterIndex(15)] = pc;
 }
+
+void ARM7TDMI::step() {
+  // Grab instruction currently in the decode stage (pipeline[0])
+  uint32_t currentInstruction = pipeline[0];
+
+  // Fetch the next instruction from memory to keep the pipeline full
+  fillPipeline();
+
+  // Bit 5 of CPSR 0 = ARM 1 = THUMB
+  bool isThumb = (cpsr & 0x20);
+
+  if (isThumb) {
+    executeTHUMB(currentInstruction);
+  } else {
+    executeARM(currentInstruction);
+  }
+}
+
+void ARM7TDMI::executeARM(uint32_t instruction) {
+  // Evaluate Condition Codes (Bits 28-31)
+  uint8_t cond = (instruction >> 28) & 0xF;
+
+  // TODO: Implement a checkCondition(cond) helper
+
+  // Main Instruction Decode bits (25-27)
+  uint8_t opcodeGroup = (instruction >> 25) & 0x07;
+
+  switch (opcodeGroup) {
+  case 0x00:
+    // Multiply
+    // Multiply Long
+    // Single Data Swap
+    // Branch and Exchange,
+    // Halfword data transfer register/immediate offset
+    break;
+  case 0x01:
+    // Data processing and FSR transfer
+    break;
+  case 0x02:
+    // Load/store word or unsigned byte (immediate)
+    break;
+  case 0x03:
+    // Load/store word or unsigned byte (register)
+    break;
+  case 0x04:
+    // Block data transfer
+    break;
+  case 0x05:
+    // Branch
+    break;
+  case 0x06:
+    // Coprocessor Data Transfer
+    break;
+  case 0x07:
+    // Coprocessor Data Operation
+    // Coprocessor Register Transfer,
+    // Software Interrrupt
+    break;
+  }
+}
+
+void ARM7TDMI::executeTHUMB(uint32_t instruction) {
+  // THUMB instructions are only 16 bits unlike ARM's 32
+  uint16_t thumbInstr = static_cast<uint16_t>(instruction);
+
+  // Decode bits 13-15 for operation
+  uint8_t opcodeGroup = (thumbInstr >> 13) & 0x07;
+
+  switch (opcodeGroup) {
+  case 0x00:
+    // Move shifted registers
+    // Add and subtract
+    break;
+  case 0x01:
+    // Move, compare, add, and sub immediate
+    break;
+  case 0x02:
+    // ALU Operation
+    // High registers operations and branch exchange
+    // PC-relative load
+    // Load and store with relative offset
+    // Load and store sign-extended byte and Halfword
+    break;
+  case 0x03:
+    // Load and store with immediate offset
+    break;
+  case 0x04:
+    // Load and store halfword
+    // SP-relative load and store
+    break;
+  case 0x05:
+    // Load address
+    // Add offset to stack pointer
+    // Push and pop registers
+    break;
+  case 0x06:
+    // Multple load and store
+    // Conditional branch
+    // Software Interrrupt
+    break;
+  case 0x07:
+    // Unconditional Branch
+    // Long Branch with Link
+    break;
+  }
+}
