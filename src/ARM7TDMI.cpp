@@ -179,7 +179,7 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
     // Single Data Swap
     // Halfword data transfer register/immediate offset
     // Where bits 7 and 4 are 1 for sure
-    if ((instruction & 0x00000070) == 0x00000090) {
+    if ((instruction & 0x00000090) == 0x00000090) {
       // Bit 7 & 4 both 1 means mul, single data swap, or halfword data transfer
       if ((instruction & 0x000000F0) == 0x00000090) {
         // bit 5 and 6 00b must be
