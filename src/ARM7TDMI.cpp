@@ -177,12 +177,62 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
     // Multiply
     // Multiply Long
     // Single Data Swap
-    // Branch and Exchange,
     // Halfword data transfer register/immediate offset
-    break;
+    // Where bits 7 and 4 are 1 for sure
+    if ((instruction & 0x00000070) == 0x00000090) {
+      // Bit 7 & 4 both 1 means mul, single data swap, or halfword data transfer
+      if ((instruction & 0x000000F0) == 0x00000090) {
+        // bit 5 and 6 00b must be
+        // Multiplication or Single Data Swap
+        if ((instruction & 0x01B00000) == 0x01000000) {
+          // Single data swap
+          break;
+        } else {
+          // Multiplication
+          break;
+        }
+      } else {
+        // must be Halfword data transfer
+        if ((instruction & 0x00400F00) == 0x00000000) {
+          // bit 22 being 0 and bits 11-8 being 0
+          // halfword data transfer register offset
+          break;
+        } else {
+          // Halfword data transfer imm offset
+          break;
+        }
+      }
+    }
+    if ((instruction & 0x01FFFF00) == 0x012FFF00) {
+      // Branch and Exchange,
+      break;
+    }
+    // PSR Transfer (MRS, MSR)
+    if ((instruction & 0x019F0FFF) == 0x010F0000) {
+      // MRS
+      break;
+    }
+    if ((instruction & 0x0190F000) == 0x0100F000) {
+      // MSR
+      break;
+    } else {
+      // ALU
+      break;
+    }
   case 0x01:
     // Data processing and FSR transfer
-    break;
+    // PSR Transfer (MRS, MSR)
+    if ((instruction & 0x019F0FFF) == 0x010F0000) {
+      // MRS
+      break;
+    }
+    if ((instruction & 0x0190F000) == 0x0100F000) {
+      // MSR
+      break;
+    } else {
+      // ALU
+      break;
+    }
   case 0x02:
     // Load/store word or unsigned byte (immediate)
     break;
@@ -202,7 +252,17 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
     // Coprocessor Data Operation
     // Coprocessor Register Transfer,
     // Software Interrrupt
-    break;
+    if ((instruction & 0x0F000010) == 0x0E000010) {
+      // Coprocessor Register Transfer
+      break;
+    }
+    if ((instruction & 0x0F000010) == 0x0E000000) {
+      // Coprocessor Data Operations
+      break;
+    } else {
+      // Software Interrupt
+      break;
+    }
   }
 }
 
@@ -217,6 +277,13 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
   case 0x00:
     // Move shifted registers
     // Add and subtract
+    if ((thumbInstr & 0xF800) == 0x1800) {
+      // Add and Subtract
+      break;
+    } else {
+      // Move shifted register
+      break;
+    }
     break;
   case 0x01:
     // Move, compare, add, and sub immediate
@@ -227,6 +294,22 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
     // PC-relative load
     // Load and store with relative offset
     // Load and store sign-extended byte and Halfword
+    if ((thumbInstr & 0xFC00) == 0x4000) {
+      // ALU
+      break;
+    } else if ((thumbInstr & 0xFC00) == 0x4400) {
+      // High register operations and branch exchange
+      break;
+    } else if ((thumbInstr & 0xF800) == 0x4800) {
+      // load PC relative
+      break;
+    } else if ((thumbInstr & 0xF200) == 0x5000) {
+      // load/store with register offset
+      break;
+    } else if ((thumbInstr & 0xF200) == 0x5200) {
+      // load/store sign-extended byte and halfword
+      break;
+    }
     break;
   case 0x03:
     // Load and store with immediate offset
@@ -234,20 +317,54 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
   case 0x04:
     // Load and store halfword
     // SP-relative load and store
+    if ((thumbInstr & 0xF000) == 0x8000) {
+      // Load and store halfword
+      break;
+    } else if ((thumbInstr & 0xF000) == 0x9000) {
+      // SP-relative and store
+      break;
+    }
     break;
   case 0x05:
     // Load address
     // Add offset to stack pointer
     // Push and pop registers
+    if ((thumbInstr & 0xF000) == 0xA000) {
+      // Load address
+      break;
+    } else if ((thumbInstr & 0xFF00) == 0xB000) {
+      // Add offset to stack pointer
+      break;
+    } else if ((thumbInstr & 0xF600) == 0xB400) {
+      // push and pop registers
+      break;
+    }
     break;
   case 0x06:
     // Multple load and store
     // Conditional branch
     // Software Interrrupt
+    if ((thumbInstr & 0xF000) == 0xC000) {
+      // Multple load and store
+      break;
+    } else if ((thumbInstr & 0xFF00) == 0xDF00) {
+      // Software Interrupt
+      break;
+    } else if ((thumbInstr & 0xF000) == 0xD000) {
+      // Conditional Branch
+      break;
+    }
     break;
   case 0x07:
     // Unconditional Branch
     // Long Branch with Link
+    if ((thumbInstr & 0xF800) == 0xE000) {
+      // Unconditional Branch
+      break;
+    } else if ((thumbInstr & 0xF000) == 0xF000) {
+      // Long Branch with Link
+      break;
+    }
     break;
   }
 }
