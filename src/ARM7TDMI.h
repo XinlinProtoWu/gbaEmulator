@@ -3,8 +3,10 @@
 #include <array>
 #include <cstdint>
 
-// Forward declaration of Memory class
+// Forward declaration of Memory class, ARMOps class, and THUMBOps class
 class MemoryBus;
+class ARMOps;
+class THUMBOps;
 // ARM7TDMI Operating Modes (Stored in the lower 5 bits of CPSR)
 enum class CpuMode : uint8_t {
   User = 0x10,
@@ -17,6 +19,9 @@ enum class CpuMode : uint8_t {
 };
 
 class ARM7TDMI {
+  friend class ARMOps;
+  friend class THUMBOps;
+
 public:
   ARM7TDMI(MemoryBus &bus);
   ~ARM7TDMI() = default;

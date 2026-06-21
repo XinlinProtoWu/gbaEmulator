@@ -1,4 +1,6 @@
 #include "ARM7TDMI.h"
+#include "ARMOps.h"
+#include "THUMBOps.h"
 #include "memoryBus.h"
 #include <cstdint>
 #include <iostream>
@@ -186,9 +188,11 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
         // Multiplication or Single Data Swap
         if ((instruction & 0x01B00000) == 0x01000000) {
           // Single data swap
+          ARMOps::singleDataSwap(*this, instruction);
           break;
         } else {
           // Multiplication
+          ARMOps::muliply(*this, instruction);
           break;
         }
       } else {
@@ -196,27 +200,33 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
         if ((instruction & 0x00400F00) == 0x00000000) {
           // bit 22 being 0 and bits 11-8 being 0
           // halfword data transfer register offset
+          ARMOps::halfwordDataTransReg(*this, instruction);
           break;
         } else {
           // Halfword data transfer imm offset
+          ARMOps::halfwordDataTransImm(*this, instruction);
           break;
         }
       }
     }
     if ((instruction & 0x01FFFF00) == 0x012FFF00) {
       // Branch and Exchange,
+      ARMOps::branchAndExchange(*this, instruction);
       break;
     }
     // PSR Transfer (MRS, MSR)
     if ((instruction & 0x019F0FFF) == 0x010F0000) {
       // MRS
+      ARMOps::MRS(*this, instruction);
       break;
     }
     if ((instruction & 0x0190F000) == 0x0100F000) {
       // MSR
+      ARMOps::MSR(*this, instruction);
       break;
     } else {
       // ALU
+      ARMOps::ALU(*this, instruction);
       break;
     }
   case 0x01:
@@ -224,29 +234,37 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
     // PSR Transfer (MRS, MSR)
     if ((instruction & 0x019F0FFF) == 0x010F0000) {
       // MRS
+      ARMOps::MRS(*this, instruction);
       break;
     }
     if ((instruction & 0x0190F000) == 0x0100F000) {
       // MSR
+      ARMOps::MSR(*this, instruction);
       break;
     } else {
       // ALU
+      ARMOps::ALU(*this, instruction);
       break;
     }
   case 0x02:
     // Load/store word or unsigned byte (immediate)
+    ARMOps::loadStoreWBImm(*this, instruction);
     break;
   case 0x03:
     // Load/store word or unsigned byte (register)
+    ARMOps::loadStoreWBReg(*this, instruction);
     break;
   case 0x04:
     // Block data transfer
+    ARMOps::blockDataTransfer(*this, instruction);
     break;
   case 0x05:
     // Branch
+    ARMOps::branch(*this, instruction);
     break;
   case 0x06:
     // Coprocessor Data Transfer
+    ARMOps::coprocessorDataTransfer(*this, instruction);
     break;
   case 0x07:
     // Coprocessor Data Operation
@@ -254,13 +272,16 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
     // Software Interrrupt
     if ((instruction & 0x0F000010) == 0x0E000010) {
       // Coprocessor Register Transfer
+      ARMOps::coprocessorRegTransfer(*this, instruction);
       break;
     }
     if ((instruction & 0x0F000010) == 0x0E000000) {
       // Coprocessor Data Operations
+      ARMOps::coprocessorDataOPP(*this, instruction);
       break;
     } else {
       // Software Interrupt
+      ARMOps::SWI(*this, instruction);
       break;
     }
   }
@@ -279,14 +300,17 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
     // Add and subtract
     if ((thumbInstr & 0xF800) == 0x1800) {
       // Add and Subtract
+      THUMBOps::addAndSub(*this, thumbInstr);
       break;
     } else {
       // Move shifted register
+      THUMBOps::moveShiftedReg(*this, thumbInstr);
       break;
     }
     break;
   case 0x01:
     // Move, compare, add, and sub immediate
+    THUMBOps::MCASImm(*this, thumbInstr);
     break;
   case 0x02:
     // ALU Operation
@@ -296,32 +320,40 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
     // Load and store sign-extended byte and Halfword
     if ((thumbInstr & 0xFC00) == 0x4000) {
       // ALU
+      THUMBOps::ALU(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xFC00) == 0x4400) {
       // High register operations and branch exchange
+      THUMBOps::hiRegOpBE(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xF800) == 0x4800) {
       // load PC relative
+      THUMBOps::loadPCRel(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xF200) == 0x5000) {
-      // load/store with register offset
+      // load/store with relative offset
+      THUMBOps::loadStoreRelOff(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xF200) == 0x5200) {
       // load/store sign-extended byte and halfword
+      THUMBOps::loadStoreSBHw(*this, thumbInstr);
       break;
     }
     break;
   case 0x03:
     // Load and store with immediate offset
+    THUMBOps::loadStoreImmOff(*this, thumbInstr);
     break;
   case 0x04:
     // Load and store halfword
     // SP-relative load and store
     if ((thumbInstr & 0xF000) == 0x8000) {
       // Load and store halfword
+      THUMBOps::loadStoreHw(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xF000) == 0x9000) {
-      // SP-relative and store
+      // SP-relative load and store
+      THUMBOps::spRelLoadStore(*this, thumbInstr);
       break;
     }
     break;
@@ -331,12 +363,15 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
     // Push and pop registers
     if ((thumbInstr & 0xF000) == 0xA000) {
       // Load address
+      THUMBOps::loadAdr(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xFF00) == 0xB000) {
       // Add offset to stack pointer
+      THUMBOps::addOffSP(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xF600) == 0xB400) {
       // push and pop registers
+      THUMBOps::ppReg(*this, thumbInstr);
       break;
     }
     break;
@@ -346,12 +381,15 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
     // Software Interrrupt
     if ((thumbInstr & 0xF000) == 0xC000) {
       // Multple load and store
+      THUMBOps::mulLoadStore(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xFF00) == 0xDF00) {
       // Software Interrupt
+      THUMBOps::SWI(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xF000) == 0xD000) {
       // Conditional Branch
+      THUMBOps::condBranch(*this, thumbInstr);
       break;
     }
     break;
@@ -360,9 +398,11 @@ void ARM7TDMI::executeTHUMB(uint32_t instruction) {
     // Long Branch with Link
     if ((thumbInstr & 0xF800) == 0xE000) {
       // Unconditional Branch
+      THUMBOps::uncondBranch(*this, thumbInstr);
       break;
     } else if ((thumbInstr & 0xF000) == 0xF000) {
       // Long Branch with Link
+      THUMBOps::longBranchWLink(*this, thumbInstr);
       break;
     }
     break;
