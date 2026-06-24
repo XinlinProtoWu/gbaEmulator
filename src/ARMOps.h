@@ -8,6 +8,8 @@ class ARM7TDMI;
 
 class ARMOps {
 public:
+  static void setMultiFlag(ARM7TDMI &cpu, uint8_t rd, uint64_t longResult,
+                           bool isLong);
   static void muliply(ARM7TDMI &cpu, uint32_t instruction);
   static void singleDataSwap(ARM7TDMI &cpu, uint32_t instruction);
   static void halfwordDataTransReg(ARM7TDMI &cpu, uint32_t instruction);
