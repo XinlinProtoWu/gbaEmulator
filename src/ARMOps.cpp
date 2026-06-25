@@ -1,5 +1,6 @@
 #include "ARMOps.h"
 #include "ARM7TDMI.h"
+#include "memoryBus.h"
 #include <cstdint>
 #include <iostream>
 
@@ -30,11 +31,8 @@ void ARMOps::setMultiFlag(ARM7TDMI &cpu, uint8_t rd, uint64_t longResult,
   uint32_t nFlag;
   uint32_t zFlag;
   if (!isLong) {
-    nFlag = (cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] >> 31) &
-            0x00000001;
-    zFlag = cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] == 0
-                ? 0x00000001
-                : 0x00000000;
+    nFlag = (cpu.getLogicalRegister(rd) >> 31) & 0x00000001;
+    zFlag = (cpu.getLogicalRegister(rd) == 0) ? 0x00000001 : 0x00000000;
   } else {
     nFlag = static_cast<uint32_t>((longResult >> 63)) & 0x00000001;
     zFlag = (longResult == 0) ? 0x00000001 : 0x00000000;
@@ -63,7 +61,10 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
   uint32_t rdVal = cpu.getLogicalRegister(rd);
   uint64_t rdHiLoVal =
       ((static_cast<uint64_t>(rdVal) << 32) | (static_cast<uint64_t>(rnVal)));
+  uint32_t result;
   uint64_t longResult;
+  uint32_t loResult;
+  uint32_t hiResult;
   int64_t signedLongResult;
   switch (opcode) {
   case 0x00:
@@ -74,7 +75,8 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
       return;
     }
     // MUL{cond}{s} Rd, Rm, Rs; Rd=Rm*Rs
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] = rmVal * rsVal;
+    result = rmVal * rsVal;
+    cpu.setLogicalRegister(rd, result);
     if (s == 1) {
       ARMOps::setMultiFlag(cpu, rd, longResult, isLong);
     }
@@ -87,8 +89,8 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
       return;
     }
     // MLA{cond}{s} Rd, Rm, Rs, Rn; Rd=Rm*Rs+Rn
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] =
-        rmVal * rsVal + rnVal;
+    result = rmVal * rsVal + rnVal;
+    cpu.setLogicalRegister(rd, result);
     if (s == 1) {
       ARMOps::setMultiFlag(cpu, rd, longResult, isLong);
     }
@@ -103,11 +105,11 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
     // UMULL{cond}{s} RdLo, RdHi, Rm, Rs; RdHiLo=Rm*Rs
     longResult = static_cast<uint64_t>(rmVal) * static_cast<uint64_t>(rsVal);
     // Set RdHi
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] =
-        static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    hiResult = static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rd, hiResult);
     // Set RdLo
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rn)] =
-        static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    loResult = static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rn, loResult);
     if (s == 1) {
       ARMOps::setMultiFlag(cpu, rd, longResult, isLong);
     }
@@ -123,11 +125,11 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
     longResult =
         static_cast<uint64_t>(rmVal) * static_cast<uint64_t>(rsVal) + rdHiLoVal;
     // Set RdHi
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] =
-        static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    hiResult = static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rd, hiResult);
     // Set RdLo
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rn)] =
-        static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    loResult = static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rn, loResult);
     if (s == 1) {
       ARMOps::setMultiFlag(cpu, rd, longResult, isLong);
     }
@@ -145,11 +147,11 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
     // Cast back to unsigned int to store into registers
     longResult = static_cast<uint64_t>(signedLongResult);
     // Set RdHi
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] =
-        static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    hiResult = static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rd, hiResult);
     // Set RdLo
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rn)] =
-        static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    loResult = static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rn, loResult);
     if (s == 1) {
       ARMOps::setMultiFlag(cpu, rd, longResult, isLong);
     }
@@ -168,11 +170,11 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
     // Cast back to unsigned int to store into registers
     longResult = static_cast<uint64_t>(signedLongResult);
     // Set RdHi
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rd)] =
-        static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    hiResult = static_cast<uint32_t>((longResult >> 32) & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rd, hiResult);
     // Set RdLo
-    cpu.physicalRegisters[cpu.getPhysicalRegisterIndex(rn)] =
-        static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    loResult = static_cast<uint32_t>(longResult & 0xFFFFFFFF);
+    cpu.setLogicalRegister(rn, loResult);
     if (s == 1) {
       ARMOps::setMultiFlag(cpu, rd, longResult, isLong);
     }
@@ -180,7 +182,53 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::singleDataSwap(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::singleDataSwap(ARM7TDMI &cpu, uint32_t instruction) {
+  // SWP{cond}{B} Rd, Rm, [Rn]; Rd=[Rn]=Rm, [Rn]=Rm
+  // Byte/word bit: 0=swap 32b word, 1 = swap 8b byte
+  uint8_t b = (instruction >> 22) & 0x01;
+  // Base reg
+  uint8_t rn = (instruction >> 16) & 0x0F;
+  // Destination reg
+  uint8_t rd = (instruction >> 12) & 0x0F;
+  // Source reg
+  uint8_t rm = instruction & 0x0F;
+
+  // Register check
+  if (rn == 15 || rd == 15 || rm == 15) {
+    std::cerr << "Register Usage Error!" << std::endl;
+    return;
+  }
+
+  // Address
+  uint32_t rnAddress = cpu.getLogicalRegister(rn);
+  // Value stored in rm
+  uint32_t rmVal = cpu.getLogicalRegister(rm);
+  if (!b) {
+    // SWP
+    // Get word alligned address by clearing bottom 2 bits and determining if
+    // there will be a shift
+    uint32_t wordAlignedAddr = rnAddress & ~0x03;
+    uint32_t shift = (rnAddress & 0x03) * 8;
+    uint32_t oldVal = cpu.memoryBus.read32(wordAlignedAddr);
+    // If it was shifted, handle unaligned read rotation, this was a notorious
+    // ARM7TDMI BUG
+    if (shift != 0) {
+      oldVal = (oldVal >> shift) | (oldVal << (32 - shift));
+    }
+    // write rmVal to rnAddress
+    cpu.memoryBus.write32(rnAddress, rmVal);
+    // put old value in rd
+    cpu.setLogicalRegister(rd, oldVal);
+  } else {
+    // SWPB
+    uint32_t oldVal = cpu.memoryBus.read8(rnAddress);
+    // write the lowest byte of rmVal to memory
+    cpu.memoryBus.write8(rnAddress, rmVal & 0xFF);
+    // Place the zero-expanded byte into rd
+    oldVal = oldVal & 0x000000FF;
+    cpu.setLogicalRegister(rd, oldVal);
+  }
+}
 
 void ARMOps::halfwordDataTransReg(ARM7TDMI &cpu, uint32_t instruction) {}
 

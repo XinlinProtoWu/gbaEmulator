@@ -32,6 +32,7 @@ public:
 
   // Debugger and State Access
   uint32_t getLogicalRegister(int index) const;
+  void setLogicalRegister(int index, uint32_t value);
   uint32_t getCPSR() const;
 
 private:

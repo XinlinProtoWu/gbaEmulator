@@ -76,6 +76,10 @@ uint32_t ARM7TDMI::getLogicalRegister(int index) const {
   return physicalRegisters[getPhysicalRegisterIndex(index)];
 }
 
+void ARM7TDMI::setLogicalRegister(int index, uint32_t value) {
+  physicalRegisters[getPhysicalRegisterIndex(index)] = value;
+}
+
 uint8_t ARM7TDMI::getSPSRIndex() {
   switch (static_cast<CpuMode>(currentMode)) {
   case CpuMode::FIQ:
