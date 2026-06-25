@@ -356,7 +356,7 @@ void ARMOps::halfwordDataTransImm(ARM7TDMI &cpu, uint32_t instruction) {
   // Calcutate offset
   uint32_t offset = (immHi << 4) | immLo;
   uint32_t baseAddr = cpu.getLogicalRegister(rn);
-  uint32_t effectiveAddr = (u == 1) ? effectiveAddr : baseAddr;
+  uint32_t effectiveAddr = (u == 1) ? (baseAddr + offset) : (baseAddr - offset);
   uint32_t transferAddr = (p == 1) ? effectiveAddr : baseAddr;
 
   // Decode opcode
