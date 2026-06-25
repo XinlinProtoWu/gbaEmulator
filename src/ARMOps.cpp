@@ -198,6 +198,11 @@ void ARMOps::singleDataSwap(ARM7TDMI &cpu, uint32_t instruction) {
     std::cerr << "Register Usage Error!" << std::endl;
     return;
   }
+  // Instruction legality check
+  if ((instruction & 0x0FB00FF0) != 0x01000090) {
+    std::cerr << "Undefined Instruction!" << std::endl;
+    return;
+  }
 
   // Address
   uint32_t rnAddress = cpu.getLogicalRegister(rn);
@@ -230,9 +235,175 @@ void ARMOps::singleDataSwap(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::halfwordDataTransReg(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::halfwordDataTransReg(ARM7TDMI &cpu, uint32_t instruction) {
+  // Pre/Post(0 add offset POST transfer, 1 add offset PRE transfer)
+  uint8_t p = (instruction >> 24) & 0x01;
+  // Up/Down (0=down, subtarct offset from base. 1=up, add to base)
+  uint8_t u = (instruction >> 23) & 0x01;
+  // i bit (22 bit) will be 0 since it is REG offset
+  // Write-back bit (0=no write, 1=write address into base)
+  uint8_t w = (instruction >> 21) & 0x01;
+  // Load/store bit, 0 = store 1 = load
+  uint8_t l = (instruction >> 20) & 0x01;
+  // base register
+  uint8_t rn = (instruction >> 16) & 0x0F;
+  // source/destination register
+  uint8_t rd = (instruction >> 12) & 0x0F;
+  // Opcode
+  uint8_t opcode = (instruction >> 5) & 0x03;
+  // offset register
+  uint8_t rm = instruction & 0x0F;
 
-void ARMOps::halfwordDataTransImm(ARM7TDMI &cpu, uint32_t instruction) {}
+  // Instruction legality check:
+  if ((instruction & 0x0E400F90) != 0x00000090) {
+    std::cerr << "Undefined Instruction!" << std::endl;
+    return;
+  }
+  if (p == 0 && w != 0) {
+    std::cerr << "Halfword Data Transfer Instruction Error, when p bit 0 w bit "
+                 "will be unused.";
+    w = 0;
+  }
+  if (rm == 15) {
+    std::cerr << "Register Usage Error!" << std::endl;
+    return;
+  }
+
+  // Offset calculation
+  uint32_t offset = cpu.getLogicalRegister(rm);
+  uint32_t baseAddr = cpu.getLogicalRegister(rn);
+  uint32_t effectiveAddr = (u == 1) ? (baseAddr + offset) : (baseAddr - offset);
+  // Pre/post indexing
+  uint32_t transferAddr = (p == 1) ? effectiveAddr : baseAddr;
+  // Decode opcode
+  switch (opcode) {
+  case 0x01:
+    if (l == 0) {
+      // STR{cond}H rd,<address>; [a]=rd
+      // Lower 16 bits of Rd
+      uint32_t rdVal = cpu.getLogicalRegister(rd) & 0xFFFF;
+      cpu.memoryBus.write16(transferAddr, rdVal);
+    } else {
+      // LDR{cond}H rd,<address>; load unsigned halfword (0 extended)
+      uint32_t val = cpu.memoryBus.read16(transferAddr);
+      cpu.setLogicalRegister(rd, val);
+    }
+    break;
+  case 0x02:
+    if (l == 0) {
+      // Load double word does not exist on ARM7TDMI
+      std::cerr << "LDRD not supported on ARM7TDMI" << std::endl;
+      return;
+    } else {
+      // LDR{cond}B rd, <address>; load signed byte (sign extended)
+      uint8_t val = cpu.memoryBus.read8(transferAddr);
+      uint32_t signExtended = (val & 0x80) ? (val | 0xFFFFFF00) : val;
+      cpu.setLogicalRegister(rd, signExtended);
+    }
+    break;
+  case 0x03:
+    if (l == 0) {
+      // Store double word does not exist on ARM7TDMI
+      std::cerr << "STRD not supported on ARM7TDMI" << std::endl;
+      return;
+    } else {
+      // LDR{cond}SH rd, <address>; load signed halfword (sign extended)
+      uint16_t val = cpu.memoryBus.read16(transferAddr);
+      uint32_t signExtended = (val & 0x8000) ? (val | 0xFFFF0000) : val;
+      cpu.setLogicalRegister(rd, signExtended);
+    }
+    break;
+  }
+
+  // Write back if P=0 or W=1
+  if (((p == 0) || (w == 1)) && (rn != 15)) {
+    cpu.setLogicalRegister(rn, effectiveAddr);
+  }
+}
+
+void ARMOps::halfwordDataTransImm(ARM7TDMI &cpu, uint32_t instruction) {
+  // Pre/Post(0 add offset POST transfer, 1 add offset PRE transfer)
+  uint8_t p = (instruction >> 24) & 0x01;
+  // Up/Down (0=down, subtarct offset from base. 1=up, add to base)
+  uint8_t u = (instruction >> 23) & 0x01;
+  // i bit (22 bit) will be 1 since it is Imm offset
+  // Write-back bit (0=no write, 1=write address into base)
+  uint8_t w = (instruction >> 21) & 0x01;
+  // Load/store bit, 0 = store 1 = load
+  uint8_t l = (instruction >> 20) & 0x01;
+  // base register
+  uint8_t rn = (instruction >> 16) & 0x0F;
+  // source/destination register
+  uint8_t rd = (instruction >> 12) & 0x0F;
+  // Imm offset High
+  uint8_t immHi = (instruction >> 8) & 0x0F;
+  // Opcode
+  uint8_t opcode = (instruction >> 5) & 0x03;
+  // Imm offset Lo
+  uint8_t immLo = instruction & 0x0F;
+
+  // Instruction legality check:
+  if ((instruction & 0x0E400090) != 0x00400090) {
+    std::cerr << "Undefined Instruction!" << std::endl;
+    return;
+  }
+  if (p == 0 && w != 0) {
+    std::cerr << "Halfword Data Transfer Instruction Error, when p bit 0 w bit "
+                 "will be unused.";
+    w = 0;
+  }
+
+  // Calcutate offset
+  uint32_t offset = (immHi << 4) | immLo;
+  uint32_t baseAddr = cpu.getLogicalRegister(rn);
+  uint32_t effectiveAddr = (u == 1) ? effectiveAddr : baseAddr;
+  uint32_t transferAddr = (p == 1) ? effectiveAddr : baseAddr;
+
+  // Decode opcode
+  switch (opcode) {
+  case 0x01:
+    if (l == 0) {
+      // STR{cond}H rd,<address>; [a]=rd
+      // Lower 16 bits of Rd
+      uint32_t rdVal = cpu.getLogicalRegister(rd) & 0xFFFF;
+      cpu.memoryBus.write16(transferAddr, rdVal);
+    } else {
+      // LDR{cond}H rd,<address>; load unsigned halfword (0 extended)
+      uint32_t val = cpu.memoryBus.read16(transferAddr);
+      cpu.setLogicalRegister(rd, val);
+    }
+    break;
+  case 0x02:
+    if (l == 0) {
+      // Load double word does not exist on ARM7TDMI
+      std::cerr << "LDRD not supported on ARM7TDMI" << std::endl;
+      return;
+    } else {
+      // LDR{cond}B rd, <address>; load signed byte (sign extended)
+      uint8_t val = cpu.memoryBus.read8(transferAddr);
+      uint32_t signExtended = (val & 0x80) ? (val | 0xFFFFFF00) : val;
+      cpu.setLogicalRegister(rd, signExtended);
+    }
+    break;
+  case 0x03:
+    if (l == 0) {
+      // Store double word does not exist on ARM7TDMI
+      std::cerr << "STRD not supported on ARM7TDMI" << std::endl;
+      return;
+    } else {
+      // LDR{cond}SH rd, <address>; load signed halfword (sign extended)
+      uint16_t val = cpu.memoryBus.read16(transferAddr);
+      uint32_t signExtended = (val & 0x8000) ? (val | 0xFFFF0000) : val;
+      cpu.setLogicalRegister(rd, signExtended);
+    }
+    break;
+  }
+
+  // Write-back only occurs if P=0 or W=1
+  if (((p == 0) || (w == 1)) && (rn != 15)) {
+    cpu.setLogicalRegister(rn, effectiveAddr);
+  }
+}
 
 void ARMOps::branchAndExchange(ARM7TDMI &cpu, uint32_t instruction) {}
 
