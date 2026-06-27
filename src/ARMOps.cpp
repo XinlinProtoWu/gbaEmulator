@@ -179,6 +179,9 @@ void ARMOps::muliply(ARM7TDMI &cpu, uint32_t instruction) {
       ARMOps::setMultiFlag(cpu, rd, longResult, isLong);
     }
     break;
+  default:
+    std::cerr << "Undefined Multiply Opcode Format" << std::endl;
+    return;
   }
 }
 
@@ -313,6 +316,9 @@ void ARMOps::halfwordDataTransReg(ARM7TDMI &cpu, uint32_t instruction) {
       cpu.setLogicalRegister(rd, signExtended);
     }
     break;
+  default:
+    std::cerr << "Undefined Data Transfer Opcode Format" << std::endl;
+    return;
   }
 
   // Write back if P=0 or W=1
@@ -397,6 +403,9 @@ void ARMOps::halfwordDataTransImm(ARM7TDMI &cpu, uint32_t instruction) {
       cpu.setLogicalRegister(rd, signExtended);
     }
     break;
+  default:
+    std::cerr << "Undefined Data Transfer Opcode Format" << std::endl;
+    return;
   }
 
   // Write-back only occurs if P=0 or W=1
@@ -405,7 +414,48 @@ void ARMOps::halfwordDataTransImm(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::branchAndExchange(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::branchAndExchange(ARM7TDMI &cpu, uint32_t instruction) {
+  uint8_t opcode = (instruction >> 4) & 0x0F;
+  // Operand Register (R0-R14)
+  uint8_t rn = instruction & 0x0F;
+  if (rn == 15) {
+    std::cerr << "Register Usage Error!" << std::endl;
+    return;
+  }
+
+  uint32_t rnVal = cpu.getLogicalRegister(rn);
+  uint8_t t;
+  const uint8_t pc = 15;
+
+  switch (opcode) {
+  case 0x01:
+    // BX{cond} Rn; PC=Rn, T=Rn.0 (ARMv4T)
+    t = rnVal & 0x01;
+    if (t) {
+      // Set t bit to 1 to switch to THUMB
+      cpu.cpsr = cpu.cpsr | (0x20);
+      // Set alignment to halfword
+      cpu.setLogicalRegister(pc, (rnVal & ~0x01));
+    } else {
+      // Clear the t bit
+      cpu.cpsr = cpu.cpsr & ~(0x20);
+      // Align program counter to word (32 bit);
+      cpu.setLogicalRegister(pc, (rnVal & ~0x03));
+    }
+
+    // Branched to new address, refresh pipeline
+    cpu.flushPipeline();
+    cpu.fillPipeline();
+    break;
+  case 0x03:
+    // BLX does not exist on ARM7TDMI
+    std::cerr << "BLX Instruction is not supported on ARM7TDMI!" << std::endl;
+    return;
+  default:
+    std::cerr << "Undefined BX Opcode Format!" << std::endl;
+    return;
+  }
+}
 
 void ARMOps::MRS(ARM7TDMI &cpu, uint32_t instruction) {}
 
