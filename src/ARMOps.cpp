@@ -457,9 +457,116 @@ void ARMOps::branchAndExchange(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::MRS(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::MRS(ARM7TDMI &cpu, uint32_t instruction) {
+  // Immediate Operand Flag (bit 25, 0 for MRS)
 
-void ARMOps::MSR(ARM7TDMI &cpu, uint32_t instruction) {}
+  // Source/destination PSR (0=cpsr, 1=spsr_<current_mode>)
+  uint8_t psr = (instruction >> 22) & 0x01;
+  // Opcode (bit 21): 0 for MRS and 1 for MSR
+
+  // Destination Register (R0-R14)
+  uint8_t rd = (instruction >> 12) & 0x0F;
+
+  // legality check
+  if ((instruction & 0x0FBF0FFF) != 0x010F0000) {
+    std::cerr << "Undefined Instruction!" << std::endl;
+    return;
+  }
+  if (rd == 15) {
+    std::cerr << "Register Usage Error!" << std::endl;
+    return;
+  }
+
+  // Rd = Psr
+  uint32_t value = (psr == 0) ? cpu.getCPSR() : cpu.getCurrentSPSR();
+  cpu.setLogicalRegister(rd, value);
+}
+
+void ARMOps::MSR(ARM7TDMI &cpu, uint32_t instruction) {
+  // Immediate Operand Flag
+  uint8_t i = (instruction >> 25) & 0x01;
+  // source/destination PSR (0=cpsr, 1=spsr_<current_mode>)
+  uint8_t psr = (instruction >> 22) & 0x01;
+  // Opcode (bit 21): 0 for MRS and 1 for MSR
+
+  // Generate the write mask based on the f, s, x, c bits
+  uint32_t mask = 0;
+  if (instruction & (1 << 19))
+    mask |= 0xFF000000; // f: flags field
+  if (instruction & (1 << 18))
+    mask |= 0x00FF0000; // s: status field
+  if (instruction & (1 << 17))
+    mask |= 0x0000FF00; // x: extension field
+  if (instruction & (1 << 16))
+    mask |= 0x000000FF; // c: control field
+
+  uint32_t op = 0;
+
+  // Psr[field] = Op
+  if (!i) {
+    // MSR Psr, Rm
+
+    // legality check
+    if ((instruction & 0x0DB0FFF0) != 0x0120F000) {
+      std::cerr << "Undefined Instruction!" << std::endl;
+      return;
+    }
+
+    // Source register <op> (R0-R14)
+    uint8_t rm = instruction & 0x0F;
+    if (rm == 15) {
+      std::cerr << "Register Usage Error!" << std::endl;
+      return;
+    }
+    op = cpu.getLogicalRegister(rm);
+
+  } else {
+    // MSR Psr, Imm
+
+    // legality check
+    if ((instruction & 0x0DB0F000) != 0x0120F000) {
+      std::cerr << "Undefined Instruction!" << std::endl;
+      return;
+    }
+
+    // Shift applied to Imm (ROR in steps of two 0-30)
+    uint8_t shift = (instruction >> 8) & 0x0F;
+    // Unsigned 8bit Immediate
+    uint32_t imm = instruction & 0x0FF;
+
+    if (!shift) {
+      op = imm;
+    } else {
+      uint8_t shiftAmount = shift * 2;
+      op = (imm >> shiftAmount) | (imm << (32 - shiftAmount));
+    }
+  }
+  uint8_t currentMode = cpu.getCPSR() & 0x1F;
+  bool isPrivileged = (currentMode != static_cast<uint8_t>(CpuMode::User));
+
+  if (psr == 0) {
+    // Write to CPSR
+    // In user mode, only the condition code flags (bit 31-24) can be changed
+    if (!isPrivileged) {
+      mask &= 0xFF000000;
+    }
+
+    // The T-bit (bit 5) may never be changed via MSR
+    mask &= ~0x00000020;
+
+    uint32_t newCpsr = (cpu.getCPSR() & ~mask) | (op & mask);
+    cpu.cpsr = newCpsr;
+  } else {
+    // Write to SPSR
+    if (currentMode == static_cast<uint8_t>(CpuMode::User) ||
+        currentMode == static_cast<uint8_t>(CpuMode::System)) {
+      std::cerr << "Cannot access SPSR in User or System mode!" << std::endl;
+      return;
+    }
+    uint32_t newSpsr = (cpu.getCurrentSPSR() & ~mask) | (op & mask);
+    cpu.getCurrentSPSR() = newSpsr;
+  }
+}
 
 void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {}
 

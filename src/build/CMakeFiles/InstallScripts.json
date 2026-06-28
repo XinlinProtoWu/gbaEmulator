@@ -1,7 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/xinuwu/src/gbaEmulator/src/build/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
