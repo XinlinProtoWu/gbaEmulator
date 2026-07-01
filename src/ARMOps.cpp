@@ -3,6 +3,7 @@
 #include "memoryBus.h"
 #include <cstdint>
 #include <iostream>
+#include <type_traits>
 
 // Helper function to check for illegal register usage in multiplies
 bool isIllegalMultiply(uint8_t rd, uint8_t rn, uint8_t rs, uint8_t rm,
@@ -552,7 +553,7 @@ void ARMOps::MSR(ARM7TDMI &cpu, uint32_t instruction) {
     }
 
     // The T-bit (bit 5) may never be changed via MSR
-    mask &= ~0x00000020;
+    mask &= 0xF00000DF;
 
     uint32_t newCpsr = (cpu.getCPSR() & ~mask) | (op & mask);
     cpu.cpsr = newCpsr;
@@ -568,7 +569,302 @@ void ARMOps::MSR(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {}
+// Helper for shift type
+struct shiftResult {
+  uint32_t value;
+  uint8_t carry;
+  bool carryUpdated;
+};
+
+shiftResult shiftOperand(uint32_t value, uint8_t shiftType, uint8_t amount,
+                         uint8_t oldCarry, bool byRegister) {
+  shiftResult out{};
+  out.value = value;
+  out.carry = oldCarry;
+  out.carryUpdated = true;
+
+  switch (shiftType) {
+  case 0x0:
+    // LSL
+    if (!amount) {
+      out.carryUpdated = false;
+    } else if (amount < 32) {
+      out.carry = (value >> (32 - amount)) & 0x01;
+      out.value = value << amount;
+    } else {
+      out.carry = 0;
+      out.value = 0;
+    }
+    break;
+  case 0x1:
+    // LSR
+    if (!amount && !byRegister) {
+      amount = 32;
+    }
+    if (amount < 32) {
+      out.carry = (value >> (amount - 1)) & 0x01;
+      out.value = value >> amount;
+    } else {
+      out.carry = (value >> 31) & 0x01;
+      out.value = 0;
+    }
+    break;
+  case 0x2:
+    // ASR
+    if (!amount && !byRegister) {
+      amount = 32;
+    }
+    if (amount < 32) {
+      out.carry = (value >> (amount - 1)) & 1;
+      out.value = static_cast<int32_t>(value) >> amount;
+    } else {
+      out.carry = value >> 31;
+      out.value = (value & 0x80000000) ? 0xFFFFFFFF : 0x00000000;
+    }
+    break;
+  case 0x3:
+    // ROR / RRX
+    if (!amount && !byRegister) {
+      // RRX
+      out.value = (oldCarry << 31) | (value >> 1);
+      out.carry = value & 0x01;
+    } else {
+      amount &= 0x1F;
+      out.value = (value >> amount) | (value << (32 - amount));
+      out.carry = out.value >> 31;
+    }
+    break;
+  }
+  return out;
+}
+
+// TODO: Legality check for instruction, fact check for functionality
+void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
+  // Immediate 2nd Operand flag (0=register, 1=Immediate)
+  uint8_t i = (instruction >> 25) & 0x01;
+  // Opcode
+  uint8_t opcode = (instruction >> 21) & 0x0F;
+  // Set condition code (0=No, 1=yes, must be 1 for opcode 8-B)
+  uint8_t s = (instruction >> 20) & 0x01;
+  // 1st Operand Reg (R0-R15)
+  uint8_t rn = (instruction >> 16) & 0x0F;
+  // Destination Register (R0-R15)
+  uint8_t rd = (instruction >> 12) & 0x0F;
+
+  uint32_t op2 = 0;
+  uint8_t carryOut = (cpu.getCPSR() >> 29) & 0x01;
+
+  // PC+12 if shift by reg (i=0, r=1), otherwise PC+8
+
+  // Shift by Reg flag (0=Immediate, 1=Register)
+  uint8_t r = (!i) ? (instruction >> 4) & 0x01 : 0;
+  uint32_t pcOffset = (!i && r) ? 12 : 8;
+  uint32_t rnVal = (rn == 15) ? cpu.getLogicalRegister(15) + pcOffset
+                              : cpu.getLogicalRegister(rn);
+  uint8_t oldCarry = (cpu.getCPSR() >> 29) & 0x01;
+  if (!i) {
+    // Register as 2nd Operation
+
+    // Shift Type (0=LSL, 1=LSR, 2=ASR, 3=ROR)
+    uint8_t shiftType = (instruction >> 5) & 0x03;
+    // 2nd Operand register (R0-R15)
+    uint8_t rm = instruction & 0x0F;
+    uint32_t rmVal = (rm == 15) ? cpu.getLogicalRegister(15) + pcOffset
+                                : cpu.getLogicalRegister(rm);
+    // Shift amount, (1-31, 0 is special case)
+    uint8_t shiftAmount = 0;
+
+    if (!r) {
+      // Shift by Immeidate
+
+      shiftAmount = (instruction >> 7) & 0x1F;
+      // Handle shift type
+      shiftResult sr =
+          shiftOperand(rmVal, shiftType, shiftAmount, oldCarry, false);
+      op2 = sr.value;
+      if (sr.carryUpdated) {
+        carryOut = sr.carry;
+      }
+    } else {
+      // Shift by Register
+
+      // Shift register (R0-R14) (Only lower 8bit 0-255 used)
+      uint8_t rs = (instruction >> 8) & 0x0F;
+      uint32_t rsVal = (rs == 15) ? cpu.getLogicalRegister(15) + 12
+                                  : cpu.getLogicalRegister(rs);
+      shiftAmount = rsVal & 0xFF; // Only take lower 8 bits
+
+      // Apply shift type
+      shiftResult sr =
+          shiftOperand(rmVal, shiftType, shiftAmount, oldCarry, true);
+      op2 = sr.value;
+      carryOut = sr.carry;
+    }
+
+  } else {
+    // Immediate as 2nd Operand
+
+    // ROR Shift applied to nn (0-30, in steps of 2)
+    uint8_t is = (instruction >> 8) & 0x0F;
+    // 2nd Operand Unsigned 8Bit Immediate
+    uint8_t nn = instruction & 0x0FF;
+    uint8_t shift = is * 2;
+    uint32_t imm = nn;
+    if (!shift) {
+      op2 = imm;
+    } else {
+      op2 = (imm >> shift) | (imm << (32 - shift));
+      carryOut = (op2 >> 31) & 0x01; // Carry out is bit 31 of the result
+    }
+  }
+
+  // Perform ALU Operations
+  uint32_t result = 0;
+  bool writeBack = true;
+  bool isLogical = false;
+  bool vFlag = (cpu.getCPSR() >> 28) & 1; // Overflow flag
+  uint64_t diff = 0;
+  uint64_t sum = 0;
+  switch (opcode) {
+  case 0x0:
+    // AND
+    result = rnVal & op2;
+    isLogical = true;
+    break;
+  case 0x1:
+    // EOR
+    result = rnVal ^ op2;
+    isLogical = true;
+    break;
+  case 0x2:
+    // SUB
+    diff = static_cast<uint64_t>(rnVal) - static_cast<uint64_t>(op2);
+    result = static_cast<uint32_t>(diff);
+    carryOut = (rnVal >= op2);
+    vFlag = ((rnVal ^ op2) & (rnVal ^ result)) >> 31;
+    break;
+  case 0x3:
+    // RSB
+    diff = static_cast<uint64_t>(op2) - static_cast<uint64_t>(rnVal);
+    result = static_cast<uint64_t>(diff);
+    carryOut = (op2 >= rnVal);
+    vFlag = ((op2 ^ rnVal) & (op2 ^ result)) >> 31;
+    break;
+  case 0x4:
+    // ADD
+    sum = static_cast<uint64_t>(rnVal) + static_cast<uint64_t>(op2);
+    result = static_cast<uint32_t>(sum);
+    carryOut = (sum >> 32) & 0x01;
+    vFlag = (~(rnVal ^ op2) & (rnVal ^ result)) >> 31;
+    break;
+  case 0x5:
+    // ADC
+    sum = static_cast<uint64_t>(rnVal) + static_cast<uint64_t>(op2) +
+          static_cast<uint64_t>(carryOut);
+    result = static_cast<uint32_t>(sum);
+    carryOut = (sum >> 32) & 1;
+    vFlag = (~(rnVal ^ op2) & (rnVal ^ result)) >> 31;
+    break;
+  case 0x6:
+    // SBC
+    diff = static_cast<uint64_t>(rnVal) - static_cast<uint64_t>(op2) +
+           static_cast<uint64_t>(carryOut) - 1;
+    result = static_cast<uint32_t>(diff);
+    carryOut = static_cast<uint64_t>(rnVal) >=
+               static_cast<uint64_t>(op2) + (carryOut ? 0 : 1);
+    vFlag = ((rnVal ^ op2) & (rnVal ^ result)) >> 31;
+    break;
+  case 0x7:
+    // RSC
+    diff = static_cast<uint64_t>(op2) - static_cast<uint64_t>(rnVal) +
+           static_cast<uint64_t>(carryOut) - 1;
+    result = static_cast<uint32_t>(diff);
+    carryOut = ((static_cast<uint64_t>(op2)) >=
+                (static_cast<uint64_t>(rnVal) + (carryOut ? 0 : 1)));
+    vFlag = ((op2 ^ rnVal) & (op2 ^ result)) >> 31;
+    break;
+  case 0x8:
+    // TST
+    result = rnVal & op2;
+    isLogical = true;
+    writeBack = false;
+    break;
+  case 0x9:
+    // TEQ
+    result = rnVal ^ op2;
+    isLogical = true;
+    writeBack = false;
+    break;
+  case 0xA:
+    // CMP
+    diff = static_cast<uint64_t>(rnVal) - static_cast<uint64_t>(op2);
+    result = static_cast<uint32_t>(diff);
+    carryOut = (rnVal >= op2);
+    vFlag = ((rnVal ^ op2) & (rnVal ^ result)) >> 31;
+    writeBack = false;
+    break;
+  case 0xB:
+    // CMN
+    sum = static_cast<uint64_t>(rnVal) + static_cast<uint64_t>(op2);
+    result = static_cast<uint32_t>(sum);
+    carryOut = (sum >> 32) & 0x01;
+    vFlag = (~(rnVal ^ op2) & (rnVal ^ result)) >> 31;
+    writeBack = false;
+    break;
+  case 0xC:
+    // ORR
+    result = rnVal | op2;
+    isLogical = true;
+    break;
+  case 0xD:
+    // MOV
+    result = op2;
+    isLogical = true;
+    break;
+  case 0xE:
+    // BIC
+    result = rnVal & ~op2;
+    isLogical = true;
+    break;
+  case 0xF:
+    // MVN
+    result = ~op2;
+    isLogical = true;
+    break;
+  }
+
+  // Write back
+  if (writeBack) {
+    cpu.setLogicalRegister(rd, result);
+  }
+
+  // Update CPSR if S bit is set
+  if (s) {
+    if (rd == 15) {
+      // S==1 and Rd==15 restores SPSR to CPSR
+      uint32_t spsr = cpu.getCurrentSPSR();
+      cpu.setLogicalRegister(15, result);
+      cpu.cpsr = spsr;
+    } else {
+      uint32_t newCpsr = cpu.getCPSR();
+
+      // Update N and Z (bit 31 and 30)
+      newCpsr = ((newCpsr & 0x3FFFFFFF) |
+                 ((result & 0x80000000) ? 0x80000000 : 0x00000000));
+      newCpsr |= (!result) ? 0x40000000 : 0x00000000;
+
+      // Update C (bit 29)
+      newCpsr = ((newCpsr & 0xDFFFFFFF) | (carryOut ? 0x20000000 : 0x00000000));
+
+      // Update V (bit 28) - only for arithmetic
+      if (!isLogical) {
+        newCpsr = ((newCpsr & 0xEFFFFFFF) | (vFlag ? 0x10000000 : 0x00000000));
+      }
+
+      cpu.cpsr = newCpsr;
+    }
+  }
+}
 
 void ARMOps::loadStoreWBImm(ARM7TDMI &cpu, uint32_t instruction) {}
 

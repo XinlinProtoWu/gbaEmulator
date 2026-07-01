@@ -26,6 +26,11 @@ void ARM7TDMI::reset() {
 
 uint32_t ARM7TDMI::getCPSR() const { return cpsr; }
 
+// FIX: Currently unused
+void ARM7TDMI::setCPSRMode(uint32_t savePSR) {
+  cpsr = (cpsr & 0x0FFFFFFF) | (savePSR & 0xF0000000);
+}
+
 uint8_t ARM7TDMI::getPhysicalRegisterIndex(int logicalIndex) const {
   // R0-R7 and R15(PC) are unbanked and shared across all operating modes.
   if (logicalIndex < 8 || logicalIndex == 15) {
