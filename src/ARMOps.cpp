@@ -651,6 +651,16 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
   // Destination Register (R0-R15)
   uint8_t rd = (instruction >> 12) & 0x0F;
 
+  // Legality check
+  if ((instruction & 0x0C000000) != 0x00000000) {
+    std::cerr << "Undefined Instruction!" << std::endl;
+    return;
+  }
+  if (s == 0 && opcode >= 0x8 && opcode <= 0xB) {
+    std::cerr << "ALU Legality Error: S=0 on test instruction!" << std::endl;
+    return;
+  }
+
   uint32_t op2 = 0;
   uint8_t carryOut = (cpu.getCPSR() >> 29) & 0x01;
 
@@ -690,6 +700,12 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
 
       // Shift register (R0-R14) (Only lower 8bit 0-255 used)
       uint8_t rs = (instruction >> 8) & 0x0F;
+
+      // Legality check
+      if (rs == 15) {
+        std::cerr << "ALU Legality Error: Rs cannot be R15!" << std::endl;
+        return;
+      }
       uint32_t rsVal = (rs == 15) ? cpu.getLogicalRegister(15) + 12
                                   : cpu.getLogicalRegister(rs);
       shiftAmount = rsVal & 0xFF; // Only take lower 8 bits
@@ -704,6 +720,11 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
   } else {
     // Immediate as 2nd Operand
 
+    // Legality for bit 7 - must be 0
+    if (((instruction >> 7) & 0x01) != 0x00) {
+      std::cerr << "Undefined Instruction!" << std::endl;
+      return;
+    }
     // ROR Shift applied to nn (0-30, in steps of 2)
     uint8_t is = (instruction >> 8) & 0x0F;
     // 2nd Operand Unsigned 8Bit Immediate
@@ -836,6 +857,10 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
   // Write back
   if (writeBack) {
     cpu.setLogicalRegister(rd, result);
+    if (rd == 15) {
+      cpu.flushPipeline();
+      cpu.fillPipeline();
+    }
   }
 
   // Update CPSR if S bit is set
@@ -845,6 +870,9 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
       uint32_t spsr = cpu.getCurrentSPSR();
       cpu.setLogicalRegister(15, result);
       cpu.cpsr = spsr;
+      cpu.updateMode();
+      cpu.flushPipeline();
+      cpu.fillPipeline();
     } else {
       uint32_t newCpsr = cpu.getCPSR();
 
