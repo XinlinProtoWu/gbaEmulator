@@ -697,6 +697,11 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
     } else {
       // Shift by Register
 
+      // Legality for bit 7 - must be 0
+      if (((instruction >> 7) & 0x01) != 0x00) {
+        std::cerr << "Undefined Instruction!" << std::endl;
+        return;
+      }
       // Shift register (R0-R14) (Only lower 8bit 0-255 used)
       uint8_t rs = (instruction >> 8) & 0x0F;
 
@@ -719,11 +724,6 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
   } else {
     // Immediate as 2nd Operand
 
-    // Legality for bit 7 - must be 0
-    if (((instruction >> 7) & 0x01) != 0x00) {
-      std::cerr << "Undefined Instruction!" << std::endl;
-      return;
-    }
     // ROR Shift applied to nn (0-30, in steps of 2)
     uint8_t is = (instruction >> 8) & 0x0F;
     // 2nd Operand Unsigned 8Bit Immediate
@@ -869,7 +869,7 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
       uint32_t spsr = cpu.getCurrentSPSR();
       cpu.setLogicalRegister(15, result);
       cpu.cpsr = spsr;
-      cpu.updateMode();
+      cpu.updateProcessorMode(spsr & 0x1F);
       cpu.flushPipeline();
       cpu.fillPipeline();
     } else {
@@ -1073,7 +1073,127 @@ void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
+  // pre/post (0=post, add offset after transfer, 1=pre, before transfer)
+  uint8_t p = (instruction >> 24) & 0x01;
+  // up/down bit (0=down, subtract, 1=up, add)
+  uint8_t u = (instruction >> 23) & 0x01;
+  // PSR & force user bit (0=no, 1=load PSR or force user mode)
+  uint8_t s = (instruction >> 22) & 0x01;
+  // Write back bit (0=no writeback, 1= wrtie address into base)
+  uint8_t w = (instruction >> 21) & 0x01;
+  // Load/store bit (0=store to memory, 1=load from memory)
+  uint8_t l = (instruction >> 20) & 0x01;
+
+  // Base register (R0-R14)
+  uint8_t rn = (instruction >> 16) & 0x0F;
+  // Register list (offset is meant to be the number of words specified in
+  // rList)
+  uint32_t rList = instruction & 0x0000FFFF;
+
+  uint32_t baseAddr = cpu.getLogicalRegister(rn);
+
+  // Count number of registers listed in the rList
+  uint32_t numRegs = 0;
+  for (int regIdx = 0; regIdx < 16; regIdx++) {
+    if (rList & (0x1 << regIdx)) {
+      numRegs++;
+    }
+  }
+
+  // Handle empty list (GBA quirk)
+  // R15 loaded and Rb=Rb+/-40h
+  if (!rList) {
+    rList = (0x1 << 15);
+    numRegs = 16;
+  }
+
+  uint32_t offset = numRegs * 4;
+  uint32_t startAddr = baseAddr;
+
+  if (!u) {
+    startAddr = (!p) ? baseAddr - offset + 4 : baseAddr - offset;
+  } else {
+    startAddr = (!p) ? baseAddr : baseAddr + 4;
+  }
+
+  uint32_t currentAddr = startAddr;
+
+  bool userBankTransfer = false;
+  if (s) {
+    if (!l || !(rList & (0x1 << 15))) {
+      userBankTransfer = true;
+    }
+  }
+
+  // Is base the lowest in rList?
+  bool baseIsFirst = true;
+
+  for (int regIdx = 0; regIdx < 16; regIdx++) {
+    if (rList & (0x1 << regIdx)) {
+      if (l) {
+        // LDM
+        // Read word aligned Data
+        uint32_t val = cpu.memoryBus.read32(currentAddr & ~0x03);
+
+        if (userBankTransfer && regIdx != 15) {
+          cpu.physicalRegisters[regIdx] = val;
+        } else {
+          cpu.setLogicalRegister(regIdx, val);
+        }
+      }
+
+      if (regIdx == 15) {
+        if (s) {
+          // LDM and R15 in list with s==1, restore SPSR to CPSR
+          cpu.restoreCPSR();
+        }
+        cpu.flushPipeline();
+        cpu.fillPipeline();
+
+      } else {
+        // STM
+        uint32_t val;
+        if (regIdx == 15) {
+          val = cpu.getLogicalRegister(15) + 12;
+        } else if (userBankTransfer) {
+          val = cpu.physicalRegisters[regIdx];
+        } else {
+          val = cpu.getLogicalRegister(regIdx);
+        }
+
+        // Write-back with Base included in Rlist
+        if (regIdx == rn && w) {
+          if (baseIsFirst) {
+            val = baseAddr;
+          } else {
+            val = (u) ? baseAddr + offset : baseAddr - offset;
+          }
+        }
+
+        cpu.memoryBus.write32((currentAddr & ~0x03), val);
+      }
+
+      baseIsFirst = false;
+      currentAddr += 4;
+    }
+  }
+
+  bool disableWriteback = false;
+
+  if (userBankTransfer) {
+    disableWriteback = true;
+  }
+
+  if (l && (rList & (0x1 << rn))) {
+    disableWriteback = true;
+  }
+
+  if (w && !disableWriteback) {
+    uint32_t finalAddr = (u) ? baseAddr + offset : baseAddr - offset;
+    cpu.setLogicalRegister(rn, finalAddr);
+  }
+}
 
 void ARMOps::branch(ARM7TDMI &cpu, uint32_t instruction) {}
 

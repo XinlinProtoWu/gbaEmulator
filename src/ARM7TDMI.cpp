@@ -26,7 +26,23 @@ void ARM7TDMI::reset() {
 
 uint32_t ARM7TDMI::getCPSR() const { return cpsr; }
 
-void ARM7TDMI::updateMode() { currentMode = getCurrentSPSR() & 0x1F; }
+void ARM7TDMI::restoreCPSR() {
+  // Attempting to restore SPSR in User or System mode is unpredictable/invalid,
+  // as they do not have an SPSR.
+  if (currentMode == static_cast<uint8_t>(CpuMode::User) ||
+      currentMode == static_cast<uint8_t>(CpuMode::System)) {
+    // Depending on emulator design, ignore or throw an exception.
+    return;
+  }
+
+  // Restore CPSR from the current mode's SPSR
+  cpsr = getCurrentSPSR();
+
+  // Call a dedicated mode update function
+  updateProcessorMode(cpsr & 0x1F);
+}
+
+void ARM7TDMI::updateProcessorMode(uint8_t newMode) { currentMode = newMode; }
 
 uint8_t ARM7TDMI::getPhysicalRegisterIndex(int logicalIndex) const {
   // R0-R7 and R15(PC) are unbanked and shared across all operating modes.

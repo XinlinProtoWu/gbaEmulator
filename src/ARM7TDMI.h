@@ -34,7 +34,8 @@ public:
   uint32_t getLogicalRegister(int index) const;
   void setLogicalRegister(int index, uint32_t value);
   uint32_t getCPSR() const;
-  void updateMode();
+  void restoreCPSR();
+  void updateProcessorMode(uint8_t newMode);
 
 private:
   MemoryBus &memoryBus;
