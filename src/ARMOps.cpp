@@ -638,7 +638,6 @@ shiftResult shiftOperand(uint32_t value, uint8_t shiftType, uint8_t amount,
   return out;
 }
 
-// TODO: Legality check for instruction, fact check for functionality
 void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
   // Immediate 2nd Operand flag (0=register, 1=Immediate)
   uint8_t i = (instruction >> 25) & 0x01;
@@ -894,9 +893,185 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::loadStoreWBImm(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::loadStoreWBImm(ARM7TDMI &cpu, uint32_t instruction) {
+  // Immediate Offset Flag (bit 25) will be 0 here since it is immediate
 
-void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {}
+  // Pre/Pose (0=post, add offset after transfer, 1=pre, add to base)
+  uint8_t p = (instruction >> 24) & 0x01;
+  // Up/down bit (0=down/subtract from base, 1=up/add to base)
+  uint8_t u = (instruction >> 23) & 0x01;
+  // Byte/word bit (0=32bit word, 1=transfer 8bit byte)
+  uint8_t b = (instruction >> 22) & 0x01;
+  // Memory Mangement/writeback (depending on whether p is 1 or 0, p == 0
+  // writeback always true)
+  uint8_t twBit = (instruction >> 21) & 0x01;
+  uint8_t l = (instruction >> 20) & 0x01;
+  // Base reg (R0-R15, including R15=pc+8)
+  uint8_t rn = (instruction >> 16) & 0x0F;
+  // Destination reg (R0-R15 including R15=pc+12)
+  uint8_t rd = (instruction >> 12) & 0x0F;
+  // Unsigned 12 bit immediate offset (0-4095)
+  uint32_t immOffset = instruction & 0x0FFF;
+
+  // Legality check
+  if ((instruction & 0x0E000000) != 0x04000000) {
+    std::cerr << "Undefined Instruction!" << std::endl;
+    return;
+  }
+
+  uint32_t baseAddr = cpu.getLogicalRegister(rn);
+  if (rn == 15) {
+    baseAddr += 8;
+  }
+
+  uint32_t effectiveAddr =
+      (!u) ? (baseAddr - immOffset) : (baseAddr + immOffset);
+  uint32_t transferAddr = (!p) ? baseAddr : effectiveAddr;
+
+  if (!l) {
+    // STR: Store to memory
+    uint32_t rdVal = cpu.getLogicalRegister(rd);
+    if (rd == 15) {
+      rdVal += 12;
+    }
+
+    if (!b) {
+      // Store word
+
+      // Force word alignment
+      cpu.memoryBus.write32(transferAddr & ~0x03, rdVal);
+    } else {
+      // Store byte (don't care about alignment)
+      cpu.memoryBus.write8(transferAddr, rdVal & 0x00FF);
+    }
+  } else {
+    // LDR: Load from Memory
+    uint32_t val = 0;
+
+    if (!b) {
+      // Load word (with misaligned rotated read support)
+      uint32_t wordAlignedAddr = transferAddr & ~0x03;
+      // How many bits are shifted
+      uint32_t shift = (transferAddr & 0x03) * 8;
+      val = cpu.memoryBus.read32(wordAlignedAddr);
+
+      if (shift != 0) {
+        val = (val >> shift) | (val << (32 - shift));
+      }
+    } else {
+      // Load byte (upper 24 bits zero-extended)
+      val = cpu.memoryBus.read8(transferAddr) & 0x000000FF;
+    }
+
+    cpu.setLogicalRegister(rd, val);
+
+    // If pc was loaded into, flush the pipeline
+    if (rd == 15) {
+      cpu.flushPipeline();
+      cpu.fillPipeline();
+    }
+  }
+
+  // Writeback
+  if (((!p) || (twBit == 1)) && (rn != 15)) {
+    cpu.setLogicalRegister(rn, effectiveAddr);
+  }
+}
+
+void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {
+  // Immediate Offset Flag (bit 25) will be 1 here since it is register
+
+  // Pre/Pose (0=post, add offset after transfer, 1=pre, add to base)
+  uint8_t p = (instruction >> 24) & 0x01;
+  // Up/down bit (0=down/subtract from base, 1=up/add to base)
+  uint8_t u = (instruction >> 23) & 0x01;
+  // Byte/word bit (0=32bit word, 1=transfer 8bit byte)
+  uint8_t b = (instruction >> 22) & 0x01;
+  // Memory Mangement/writeback (depending on whether p is 1 or 0, p == 0
+  // writeback always true)
+  uint8_t twBit = (instruction >> 21) & 0x01;
+  uint8_t l = (instruction >> 20) & 0x01;
+  // Base reg (R0-R15, including R15=pc+8)
+  uint8_t rn = (instruction >> 16) & 0x0F;
+  // Destination reg (R0-R15 including R15=pc+12)
+  uint8_t rd = (instruction >> 12) & 0x0F;
+  // Shift amount (1-31, 0=special)
+  uint8_t is = (instruction >> 7) & 0x1F;
+  // Shift type (0=LSL, 1=LSR, 2=ASR, 3=ROR)
+  uint8_t shiftType = (instruction >> 5) & 0x03;
+  // offset register (R0-R14)
+  uint8_t rm = instruction & 0x0F;
+
+  // Legality check
+  if ((instruction & 0x0E000010) != 0x06000000) {
+    std::cerr << "Undefined Instruction!" << std::endl;
+    return;
+  }
+  if (rm == 15) {
+    std::cerr
+        << "Register Usage Error: Rm cannot be R15 in Shifted Register Offset!"
+        << std::endl;
+    return;
+  }
+
+  uint32_t baseAddr = cpu.getLogicalRegister(rn);
+  if (rn == 15) {
+    baseAddr += 8;
+  }
+
+  uint32_t rmVal = cpu.getLogicalRegister(rm);
+  uint8_t oldCarry = (cpu.getCPSR() >> 29) & 0x01;
+
+  shiftResult sr = shiftOperand(rmVal, shiftType, is, oldCarry, false);
+  uint32_t offset = sr.value;
+
+  uint32_t effectiveAddr = (!u) ? (baseAddr - offset) : (baseAddr + offset);
+  uint32_t transferAddr = (!p) ? baseAddr : effectiveAddr;
+
+  if (l == 0) {
+    // STR: Store to memory
+    uint32_t rdVal = cpu.getLogicalRegister(rd);
+    if (rd == 15) {
+      rdVal += 12;
+    }
+
+    if (!b) {
+      // Store word
+      cpu.memoryBus.write32(transferAddr & ~0x03, rdVal);
+    } else {
+      // Store Byte
+      cpu.memoryBus.write8(transferAddr, rdVal & 0x00FF);
+    }
+  } else {
+    // LDR
+    uint32_t val = 0;
+
+    if (b == 0) {
+      // Load word
+      uint32_t wordAlignedAddr = transferAddr & ~0x03;
+      uint32_t shift = (transferAddr & 0x03) * 8;
+      val = cpu.memoryBus.read32(wordAlignedAddr);
+
+      if (shift != 0) {
+        val = (val >> shift) | (val << (32 - shift));
+      }
+    } else {
+      // Load byte
+      val = cpu.memoryBus.read8(transferAddr) & 0x000000FF;
+    }
+
+    cpu.setLogicalRegister(rd, val);
+
+    if (rd == 15) {
+      cpu.flushPipeline();
+      cpu.fillPipeline();
+    }
+  }
+
+  if (((!p) || (twBit == 1)) && (rn != 15)) {
+    cpu.setLogicalRegister(rn, effectiveAddr);
+  }
+}
 
 void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {}
 

@@ -252,6 +252,7 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
       ARMOps::ALU(*this, instruction);
       break;
     }
+  // 0x02 and 0x03: Single Data Transfer (LDR, STR, PLD)
   case 0x02:
     // Load/store word or unsigned byte (immediate)
     ARMOps::loadStoreWBImm(*this, instruction);
