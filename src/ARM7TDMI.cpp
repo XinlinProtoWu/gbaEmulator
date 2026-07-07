@@ -123,6 +123,10 @@ uint32_t &ARM7TDMI::getCurrentSPSR() {
   return spsr[getSPSRIndex()];
 }
 
+uint32_t ARM7TDMI::getPC() const {
+  return physicalRegisters[getPhysicalRegisterIndex(15)] - 8;
+}
+
 void ARM7TDMI::flushPipeline() {
   // Check the T-bit (5th) in CPSR for operating state
   // Arm state: Execute 32 bit, word aligned

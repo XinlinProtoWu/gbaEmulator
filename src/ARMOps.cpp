@@ -286,6 +286,10 @@ void ARMOps::halfwordDataTransReg(ARM7TDMI &cpu, uint32_t instruction) {
       // STR{cond}H rd,<address>; [a]=rd
       // Lower 16 bits of Rd
       uint32_t rdVal = cpu.getLogicalRegister(rd) & 0xFFFF;
+      // Increment by 4 (pc + 12) if rd were pc
+      if (rd == 15) {
+        rdVal += 4;
+      }
       cpu.memoryBus.write16(transferAddr, rdVal);
     } else {
       // LDR{cond}H rd,<address>; load unsigned halfword (0 extended)
@@ -373,6 +377,9 @@ void ARMOps::halfwordDataTransImm(ARM7TDMI &cpu, uint32_t instruction) {
       // STR{cond}H rd,<address>; [a]=rd
       // Lower 16 bits of Rd
       uint32_t rdVal = cpu.getLogicalRegister(rd) & 0xFFFF;
+      if (rd == 15) {
+        rdVal += 4;
+      }
       cpu.memoryBus.write16(transferAddr, rdVal);
     } else {
       // LDR{cond}H rd,<address>; load unsigned halfword (0 extended)
@@ -446,7 +453,6 @@ void ARMOps::branchAndExchange(ARM7TDMI &cpu, uint32_t instruction) {
 
     // Branched to new address, refresh pipeline
     cpu.flushPipeline();
-    cpu.fillPipeline();
     break;
   case 0x03:
     // BLX does not exist on ARM7TDMI
@@ -667,7 +673,9 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
 
   // Shift by Reg flag (0=Immediate, 1=Register)
   uint8_t r = (!i) ? (instruction >> 4) & 0x01 : 0;
-  uint32_t pcOffset = (!i && r) ? 12 : 8;
+  // because PC is already 2 steps forward (4 increments per step), take away 8
+  // from pcOffset
+  uint32_t pcOffset = (!i && r) ? 4 : 0;
   uint32_t rnVal = (rn == 15) ? cpu.getLogicalRegister(15) + pcOffset
                               : cpu.getLogicalRegister(rn);
   uint8_t oldCarry = (cpu.getCPSR() >> 29) & 0x01;
@@ -710,8 +718,7 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
         std::cerr << "ALU Legality Error: Rs cannot be R15!" << std::endl;
         return;
       }
-      uint32_t rsVal = (rs == 15) ? cpu.getLogicalRegister(15) + 12
-                                  : cpu.getLogicalRegister(rs);
+      uint32_t rsVal = cpu.getLogicalRegister(rs);
       shiftAmount = rsVal & 0xFF; // Only take lower 8 bits
 
       // Apply shift type
@@ -858,7 +865,6 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
     cpu.setLogicalRegister(rd, result);
     if (rd == 15) {
       cpu.flushPipeline();
-      cpu.fillPipeline();
     }
   }
 
@@ -871,7 +877,6 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
       cpu.cpsr = spsr;
       cpu.updateProcessorMode(spsr & 0x1F);
       cpu.flushPipeline();
-      cpu.fillPipeline();
     } else {
       uint32_t newCpsr = cpu.getCPSR();
 
@@ -918,11 +923,8 @@ void ARMOps::loadStoreWBImm(ARM7TDMI &cpu, uint32_t instruction) {
     std::cerr << "Undefined Instruction!" << std::endl;
     return;
   }
-
+  // PC addr is already incremented by 8 by default
   uint32_t baseAddr = cpu.getLogicalRegister(rn);
-  if (rn == 15) {
-    baseAddr += 8;
-  }
 
   uint32_t effectiveAddr =
       (!u) ? (baseAddr - immOffset) : (baseAddr + immOffset);
@@ -932,7 +934,7 @@ void ARMOps::loadStoreWBImm(ARM7TDMI &cpu, uint32_t instruction) {
     // STR: Store to memory
     uint32_t rdVal = cpu.getLogicalRegister(rd);
     if (rd == 15) {
-      rdVal += 12;
+      rdVal += 4;
     }
 
     if (!b) {
@@ -968,7 +970,6 @@ void ARMOps::loadStoreWBImm(ARM7TDMI &cpu, uint32_t instruction) {
     // If pc was loaded into, flush the pipeline
     if (rd == 15) {
       cpu.flushPipeline();
-      cpu.fillPipeline();
     }
   }
 
@@ -1015,9 +1016,6 @@ void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {
   }
 
   uint32_t baseAddr = cpu.getLogicalRegister(rn);
-  if (rn == 15) {
-    baseAddr += 8;
-  }
 
   uint32_t rmVal = cpu.getLogicalRegister(rm);
   uint8_t oldCarry = (cpu.getCPSR() >> 29) & 0x01;
@@ -1032,7 +1030,7 @@ void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {
     // STR: Store to memory
     uint32_t rdVal = cpu.getLogicalRegister(rd);
     if (rd == 15) {
-      rdVal += 12;
+      rdVal += 4;
     }
 
     if (!b) {
@@ -1064,7 +1062,6 @@ void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {
 
     if (rd == 15) {
       cpu.flushPipeline();
-      cpu.fillPipeline();
     }
   }
 
@@ -1149,13 +1146,12 @@ void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
           cpu.restoreCPSR();
         }
         cpu.flushPipeline();
-        cpu.fillPipeline();
 
       } else {
         // STM
         uint32_t val;
         if (regIdx == 15) {
-          val = cpu.getLogicalRegister(15) + 12;
+          val = cpu.getLogicalRegister(15) + 4;
         } else if (userBankTransfer) {
           val = cpu.physicalRegisters[regIdx];
         } else {
@@ -1195,7 +1191,23 @@ void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-void ARMOps::branch(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::branch(ARM7TDMI &cpu, uint32_t instruction) {
+  // 1=branch, PC=PC+8+nn*4, 0=branch/link, PC=PC+8+nn*4, LR=PC+4
+  uint8_t opcode = (instruction >> 24) & 0x01;
+  // Signed offset in steps of 4 (-32M..+32M)
+  uint32_t nn = instruction & 0x00FFFFFF;
+  int32_t signedOffset =
+      (!((instruction >> 23) & 0x01)) ? nn : (0xFF000000 | nn);
+
+  uint32_t pc = cpu.getLogicalRegister(15);
+  if (opcode) {
+    // Branch with link
+    cpu.setLogicalRegister(14, pc - 4);
+  }
+  uint32_t newPC = pc + (signedOffset << 2);
+  cpu.setLogicalRegister(15, newPC);
+  cpu.flushPipeline();
+}
 
 void ARMOps::coprocessorDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {}
 
