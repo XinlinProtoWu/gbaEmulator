@@ -1209,10 +1209,41 @@ void ARMOps::branch(ARM7TDMI &cpu, uint32_t instruction) {
   cpu.flushPipeline();
 }
 
-void ARMOps::coprocessorDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::coprocessorDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
+  // um, coprocessors don't exist on the GBA actually
+  std::cerr << "Coprocessor Data Transfer does not exist on the GBA"
+            << std::endl;
+  return;
+}
 
-void ARMOps::coprocessorDataOPP(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::coprocessorDataOPP(ARM7TDMI &cpu, uint32_t instruction) {
+  // um, coprocessors don't exist on the GBA actually
+  std::cerr << "Coprocessor Data Operations do not exist on the GBA"
+            << std::endl;
+  return;
+}
 
-void ARMOps::coprocessorRegTransfer(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::coprocessorRegTransfer(ARM7TDMI &cpu, uint32_t instruction) {
+  // um, coprocessors don't exist on the GBA actually
+  std::cerr << "Coprocessor Register Transfer does not exist on the GBA"
+            << std::endl;
+  return;
+}
 
-void ARMOps::SWI(ARM7TDMI &cpu, uint32_t instruction) {}
+void ARMOps::SWI(ARM7TDMI &cpu, uint32_t instruction) {
+  uint32_t comment = instruction & 0x00FFFFFF;
+  const uint32_t pc = cpu.getLogicalRegister(15);
+  uint32_t returnAddr = pc - 4;
+  uint32_t currentCPSR = cpu.getCPSR();
+
+  uint32_t newCPSR = currentCPSR;
+  newCPSR &= ~0x0000003F; // Clear bits 0-5
+  newCPSR |= 0x00000013;  // Supervisor mode;
+  newCPSR |= 0x00000080;  // Set I bit to disable IRQs
+  cpu.cpsr = newCPSR;
+  cpu.updateProcessorMode(0x13);
+  cpu.getCurrentSPSR() = currentCPSR;
+  cpu.setLogicalRegister(14, returnAddr);
+  cpu.setLogicalRegister(15, 0x00000008);
+  cpu.flushPipeline();
+}
