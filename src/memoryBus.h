@@ -3,6 +3,7 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 class MemoryBus {
@@ -10,6 +11,7 @@ public:
   MemoryBus();
   ~MemoryBus();
 
+  bool loadROM(const std::string &filepath);
   // Read Methods
   uint8_t read8(uint32_t address) const;
   uint16_t read16(uint32_t address) const;

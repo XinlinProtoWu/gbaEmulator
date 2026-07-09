@@ -8,3 +8,5 @@
 
 # Build directory
 build/
+FASMARM_full/
+gba_tests/

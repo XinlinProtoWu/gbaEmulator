@@ -1,7 +1,9 @@
 #include "memoryBus.h"
 #include <cstdint>
+#include <fstream>
 #include <iomanip>  // <-- Add this line for std::setw and std::left
 #include <iostream> // For testing only
+#include <string>
 
 MemoryBus::MemoryBus() {
   // Initialize the Game Pak ROM with some dummy size for testing
@@ -19,6 +21,26 @@ MemoryBus::MemoryBus() {
 
 MemoryBus::~MemoryBus() {}
 
+bool MemoryBus::loadROM(const std::string &filepath) {
+  // Start at the end to get file size
+  std::ifstream file(filepath, std::ios::binary | std::ios::ate);
+
+  if (!file.is_open()) {
+    std::cerr << "Failed to open ROM: " << filepath << std::endl;
+    return false;
+  }
+
+  std::streamsize size = file.tellg();
+  file.seekg(0, std::ios::beg);
+
+  gamePakRom.resize(size);
+
+  if (file.read(reinterpret_cast<char *>(gamePakRom.data()), size)) {
+    std::cout << "Successfully loaded ROM: " << size << " bytes." << std::endl;
+    return true;
+  }
+  return false;
+}
 // Read
 
 uint8_t MemoryBus::read8(uint32_t address) const {
@@ -129,45 +151,4 @@ void MemoryBus::write32(uint32_t address, uint32_t value) {
 void assertTest(const std::string &testName, bool condition) {
   std::cout << std::left << std::setw(30) << testName
             << (condition ? "[ PASS ]" : "[ FAIL ]") << std::endl;
-}
-
-int main() {
-  std::cout << "--- GBA Memory Bus Initialization Test ---" << std::endl;
-
-  MemoryBus bus;
-
-  // Test 1: WRAM Read/Write (8-bit)
-  uint32_t wramAddr = 0x02001234;
-  bus.write8(wramAddr, 0xAB);
-  assertTest("WRAM 8-bit Write/Read", bus.read8(wramAddr) == 0xAB);
-
-  // Test 2: IRAM Read/Write (32-bit)
-  uint32_t iramAddr = 0x03004560;
-  bus.write32(iramAddr, 0xDEADBEEF);
-  assertTest("IRAM 32-bit Write/Read", bus.read32(iramAddr) == 0xDEADBEEF);
-
-  // Test 3: Little-Endian Storage Verification
-  // If we wrote 0xDEADBEEF to iramAddr, the byte at iramAddr should be 0xEF
-  assertTest("Little-Endian Validation", bus.read8(iramAddr) == 0xEF);
-
-  // Test 4: Palette RAM (16-bit boundaries mapped correctly)
-  // 0x05000000 is the start of Palette RAM
-  uint32_t paletteAddr = 0x05000200;
-  bus.write16(paletteAddr, 0x7FFF); // White color in GBA format
-  assertTest("Palette RAM 16-bit Access", bus.read16(paletteAddr) == 0x7FFF);
-
-  // Test 5: ROM Read-Only Protection
-  // Trying to write to the Game Pak ROM should not modify it.
-  uint32_t romAddr = 0x08000100;
-  bus.write32(romAddr, 0xFFFFFFFF);
-  assertTest("ROM Read-Only Protection", bus.read32(romAddr) == 0x00000000);
-
-  // Test 6: VRAM 16-bit Write
-  uint32_t vramAddr = 0x06000000;
-  bus.write16(vramAddr, 0x1234);
-  assertTest("VRAM 16-bit Access", bus.read16(vramAddr) == 0x1234);
-
-  std::cout << "--- Testing Complete ---" << std::endl;
-
-  return 0;
 }

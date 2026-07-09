@@ -26,9 +26,13 @@ public:
   ARM7TDMI(MemoryBus &bus);
   ~ARM7TDMI() = default;
 
+  bool pipelineFlushed = false;
   // System Interface
   void reset();
   void step();
+  void forceJump(uint32_t address);
+  void initializeGBAState();
+  uint32_t getCurrentInstruction();
 
   // Debugger and State Access
   uint32_t getLogicalRegister(int index) const;

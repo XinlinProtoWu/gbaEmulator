@@ -204,7 +204,7 @@ void ARMOps::singleDataSwap(ARM7TDMI &cpu, uint32_t instruction) {
   }
   // Instruction legality check
   if ((instruction & 0x0FB00FF0) != 0x01000090) {
-    std::cerr << "Undefined Instruction!" << std::endl;
+    std::cerr << "Undefined Instruction! (singleDataSwap)" << std::endl;
     return;
   }
 
@@ -260,7 +260,7 @@ void ARMOps::halfwordDataTransReg(ARM7TDMI &cpu, uint32_t instruction) {
 
   // Instruction legality check:
   if ((instruction & 0x0E400F90) != 0x00000090) {
-    std::cerr << "Undefined Instruction!" << std::endl;
+    std::cerr << "Undefined Instruction! (halfwordDataTransReg)" << std::endl;
     return;
   }
   if (p == 0 && w != 0) {
@@ -355,7 +355,7 @@ void ARMOps::halfwordDataTransImm(ARM7TDMI &cpu, uint32_t instruction) {
 
   // Instruction legality check:
   if ((instruction & 0x0E400090) != 0x00400090) {
-    std::cerr << "Undefined Instruction!" << std::endl;
+    std::cerr << "Undefined Instruction! (halfwordDataTransImm)" << std::endl;
     return;
   }
   if (p == 0 && w != 0) {
@@ -442,17 +442,15 @@ void ARMOps::branchAndExchange(ARM7TDMI &cpu, uint32_t instruction) {
     if (t) {
       // Set t bit to 1 to switch to THUMB
       cpu.cpsr = cpu.cpsr | (0x20);
-      // Set alignment to halfword
-      cpu.setLogicalRegister(pc, (rnVal & ~0x01));
+      rnVal &= ~0x01;
     } else {
       // Clear the t bit
       cpu.cpsr = cpu.cpsr & ~(0x20);
-      // Align program counter to word (32 bit);
-      cpu.setLogicalRegister(pc, (rnVal & ~0x03));
+      rnVal &= ~0x03;
     }
 
     // Branched to new address, refresh pipeline
-    cpu.flushPipeline();
+    cpu.forceJump(rnVal);
     break;
   case 0x03:
     // BLX does not exist on ARM7TDMI
@@ -476,7 +474,7 @@ void ARMOps::MRS(ARM7TDMI &cpu, uint32_t instruction) {
 
   // legality check
   if ((instruction & 0x0FBF0FFF) != 0x010F0000) {
-    std::cerr << "Undefined Instruction!" << std::endl;
+    std::cerr << "Undefined Instruction! (MRS)" << std::endl;
     return;
   }
   if (rd == 15) {
@@ -515,7 +513,7 @@ void ARMOps::MSR(ARM7TDMI &cpu, uint32_t instruction) {
 
     // legality check
     if ((instruction & 0x0DB0FFF0) != 0x0120F000) {
-      std::cerr << "Undefined Instruction!" << std::endl;
+      std::cerr << "Undefined Instruction! (MSR)" << std::endl;
       return;
     }
 
@@ -532,7 +530,7 @@ void ARMOps::MSR(ARM7TDMI &cpu, uint32_t instruction) {
 
     // legality check
     if ((instruction & 0x0DB0F000) != 0x0120F000) {
-      std::cerr << "Undefined Instruction!" << std::endl;
+      std::cerr << "Undefined Instruction! (MSR)" << std::endl;
       return;
     }
 
@@ -658,7 +656,7 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
 
   // Legality check
   if ((instruction & 0x0C000000) != 0x00000000) {
-    std::cerr << "Undefined Instruction!" << std::endl;
+    std::cerr << "Undefined Instruction! (ALU)" << std::endl;
     return;
   }
   if (s == 0 && opcode >= 0x8 && opcode <= 0xB) {
@@ -707,7 +705,7 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
 
       // Legality for bit 7 - must be 0
       if (((instruction >> 7) & 0x01) != 0x00) {
-        std::cerr << "Undefined Instruction!" << std::endl;
+        std::cerr << "Undefined Instruction! (ALU2)" << std::endl;
         return;
       }
       // Shift register (R0-R14) (Only lower 8bit 0-255 used)
@@ -920,7 +918,7 @@ void ARMOps::loadStoreWBImm(ARM7TDMI &cpu, uint32_t instruction) {
 
   // Legality check
   if ((instruction & 0x0E000000) != 0x04000000) {
-    std::cerr << "Undefined Instruction!" << std::endl;
+    std::cerr << "Undefined Instruction! (loadStoreWBImm)" << std::endl;
     return;
   }
   // PC addr is already incremented by 8 by default
@@ -1005,7 +1003,7 @@ void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {
 
   // Legality check
   if ((instruction & 0x0E000010) != 0x06000000) {
-    std::cerr << "Undefined Instruction!" << std::endl;
+    std::cerr << "Undefined Instruction! (loadStoreWBReg)" << std::endl;
     return;
   }
   if (rm == 15) {
@@ -1101,7 +1099,7 @@ void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
   // Handle empty list (GBA quirk)
   // R15 loaded and Rb=Rb+/-40h
   if (!rList) {
-    rList = (0x1 << 15);
+    rList = (0x01 << 15);
     numRegs = 16;
   }
 
@@ -1125,7 +1123,7 @@ void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
 
   // Is base the lowest in rList?
   bool baseIsFirst = true;
-
+  bool loadedPC = false;
   for (int regIdx = 0; regIdx < 16; regIdx++) {
     if (rList & (0x1 << regIdx)) {
       if (l) {
@@ -1138,15 +1136,13 @@ void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
         } else {
           cpu.setLogicalRegister(regIdx, val);
         }
-      }
-
-      if (regIdx == 15) {
-        if (s) {
-          // LDM and R15 in list with s==1, restore SPSR to CPSR
-          cpu.restoreCPSR();
+        if (regIdx == 15) {
+          loadedPC = true;
+          if (s) {
+            // LDM and R15 in list with s==1, restore SPSR to CPSR
+            cpu.restoreCPSR();
+          }
         }
-        cpu.flushPipeline();
-
       } else {
         // STM
         uint32_t val;
@@ -1189,6 +1185,10 @@ void ARMOps::blockDataTransfer(ARM7TDMI &cpu, uint32_t instruction) {
     uint32_t finalAddr = (u) ? baseAddr + offset : baseAddr - offset;
     cpu.setLogicalRegister(rn, finalAddr);
   }
+
+  if (loadedPC) {
+    cpu.flushPipeline();
+  }
 }
 
 void ARMOps::branch(ARM7TDMI &cpu, uint32_t instruction) {
@@ -1200,12 +1200,15 @@ void ARMOps::branch(ARM7TDMI &cpu, uint32_t instruction) {
       (!((instruction >> 23) & 0x01)) ? nn : (0xFF000000 | nn);
 
   uint32_t pc = cpu.getLogicalRegister(15);
+
   if (opcode) {
     // Branch with link
     cpu.setLogicalRegister(14, pc - 4);
   }
   uint32_t newPC = pc + (signedOffset << 2);
+
   cpu.setLogicalRegister(15, newPC);
+
   cpu.flushPipeline();
 }
 

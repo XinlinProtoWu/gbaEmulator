@@ -24,6 +24,24 @@ void ARM7TDMI::reset() {
   flushPipeline();
 }
 
+void ARM7TDMI::forceJump(uint32_t address) {
+  setLogicalRegister(15, address);
+  flushPipeline();
+}
+
+void ARM7TDMI::initializeGBAState() {
+  // Initialize SP and LR address
+  // R13 and 14 in User and System modes
+  // R21 and 22 in FIQ mode
+  // R23 and 24 in Supervisor mode
+  // R25 and 26 in Abort mode
+  // R27 and 28 in IRQ mode
+  // R29 and 30 in Undefined mode
+  physicalRegisters[13] = 0x03007FA0;
+  physicalRegisters[23] = 0x03007FE0;
+  physicalRegisters[27] = 0x03007FA0;
+}
+
 uint32_t ARM7TDMI::getCPSR() const { return cpsr; }
 
 void ARM7TDMI::restoreCPSR() {
@@ -122,6 +140,7 @@ uint32_t &ARM7TDMI::getCurrentSPSR() {
   }
   return spsr[getSPSRIndex()];
 }
+uint32_t ARM7TDMI::getCurrentInstruction() { return pipeline[0]; }
 
 uint32_t ARM7TDMI::getPC() const {
   return physicalRegisters[getPhysicalRegisterIndex(15)] - 8;
@@ -131,12 +150,14 @@ void ARM7TDMI::flushPipeline() {
   // Check the T-bit (5th) in CPSR for operating state
   // Arm state: Execute 32 bit, word aligned
   // Thumb state: Execute 16 bit, halfword-aligned
+  pipelineFlushed = true;
   bool isThumb = (cpsr & 0x20);
   uint32_t pc = physicalRegisters[getPhysicalRegisterIndex(15)];
 
   if (isThumb) {
     // Fill the 2 stage array with 16 bit Thumb instruction
     // The PC must increment by 2 (a half word)
+
     pipeline[0] = memoryBus.read16(pc);
     pc += 2;
     pipeline[1] = memoryBus.read16(pc);
@@ -178,9 +199,6 @@ void ARM7TDMI::step() {
   // Grab instruction currently in the decode stage (pipeline[0])
   uint32_t currentInstruction = pipeline[0];
 
-  // Fetch the next instruction from memory to keep the pipeline full
-  fillPipeline();
-
   // Bit 5 of CPSR 0 = ARM 1 = THUMB
   bool isThumb = (cpsr & 0x20);
 
@@ -188,6 +206,12 @@ void ARM7TDMI::step() {
     executeTHUMB(currentInstruction);
   } else {
     executeARM(currentInstruction);
+  }
+
+  if (!pipelineFlushed) {
+    fillPipeline();
+  } else {
+    pipelineFlushed = false;
   }
 }
 

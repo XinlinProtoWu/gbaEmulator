@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(SDL2 REQUIRED)
 
 add_executable(GBA_Emulator 
+    main.cpp
     ARM7TDMI.cpp 
     memoryBus.cpp 
     ARMOps.cpp 
