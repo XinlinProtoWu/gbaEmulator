@@ -1,4 +1,5 @@
 #include "ARMOps.h"
+#include "ALUHelpers.h"
 #include "ARM7TDMI.h"
 #include "memoryBus.h"
 #include <cstdint>
@@ -573,74 +574,74 @@ void ARMOps::MSR(ARM7TDMI &cpu, uint32_t instruction) {
   }
 }
 
-// Helper for shift type
-struct shiftResult {
-  uint32_t value;
-  uint8_t carry;
-  bool carryUpdated;
-};
-
-shiftResult shiftOperand(uint32_t value, uint8_t shiftType, uint8_t amount,
-                         uint8_t oldCarry, bool byRegister) {
-  shiftResult out{};
-  out.value = value;
-  out.carry = oldCarry;
-  out.carryUpdated = true;
-
-  switch (shiftType) {
-  case 0x0:
-    // LSL
-    if (!amount) {
-      out.carryUpdated = false;
-    } else if (amount < 32) {
-      out.carry = (value >> (32 - amount)) & 0x01;
-      out.value = value << amount;
-    } else {
-      out.carry = 0;
-      out.value = 0;
-    }
-    break;
-  case 0x1:
-    // LSR
-    if (!amount && !byRegister) {
-      amount = 32;
-    }
-    if (amount < 32) {
-      out.carry = (value >> (amount - 1)) & 0x01;
-      out.value = value >> amount;
-    } else {
-      out.carry = (value >> 31) & 0x01;
-      out.value = 0;
-    }
-    break;
-  case 0x2:
-    // ASR
-    if (!amount && !byRegister) {
-      amount = 32;
-    }
-    if (amount < 32) {
-      out.carry = (value >> (amount - 1)) & 1;
-      out.value = static_cast<int32_t>(value) >> amount;
-    } else {
-      out.carry = value >> 31;
-      out.value = (value & 0x80000000) ? 0xFFFFFFFF : 0x00000000;
-    }
-    break;
-  case 0x3:
-    // ROR / RRX
-    if (!amount && !byRegister) {
-      // RRX
-      out.value = (oldCarry << 31) | (value >> 1);
-      out.carry = value & 0x01;
-    } else {
-      amount &= 0x1F;
-      out.value = (value >> amount) | (value << (32 - amount));
-      out.carry = out.value >> 31;
-    }
-    break;
-  }
-  return out;
-}
+// // Helper for shift type
+// struct shiftResult {
+//   uint32_t value;
+//   uint8_t carry;
+//   bool carryUpdated;
+// };
+//
+// shiftResult shiftOperand(uint32_t value, uint8_t shiftType, uint8_t amount,
+//                          uint8_t oldCarry, bool byRegister) {
+//   shiftResult out{};
+//   out.value = value;
+//   out.carry = oldCarry;
+//   out.carryUpdated = true;
+//
+//   switch (shiftType) {
+//   case 0x0:
+//     // LSL
+//     if (!amount) {
+//       out.carryUpdated = false;
+//     } else if (amount < 32) {
+//       out.carry = (value >> (32 - amount)) & 0x01;
+//       out.value = value << amount;
+//     } else {
+//       out.carry = 0;
+//       out.value = 0;
+//     }
+//     break;
+//   case 0x1:
+//     // LSR
+//     if (!amount && !byRegister) {
+//       amount = 32;
+//     }
+//     if (amount < 32) {
+//       out.carry = (value >> (amount - 1)) & 0x01;
+//       out.value = value >> amount;
+//     } else {
+//       out.carry = (value >> 31) & 0x01;
+//       out.value = 0;
+//     }
+//     break;
+//   case 0x2:
+//     // ASR
+//     if (!amount && !byRegister) {
+//       amount = 32;
+//     }
+//     if (amount < 32) {
+//       out.carry = (value >> (amount - 1)) & 1;
+//       out.value = static_cast<int32_t>(value) >> amount;
+//     } else {
+//       out.carry = value >> 31;
+//       out.value = (value & 0x80000000) ? 0xFFFFFFFF : 0x00000000;
+//     }
+//     break;
+//   case 0x3:
+//     // ROR / RRX
+//     if (!amount && !byRegister) {
+//       // RRX
+//       out.value = (oldCarry << 31) | (value >> 1);
+//       out.carry = value & 0x01;
+//     } else {
+//       amount &= 0x1F;
+//       out.value = (value >> amount) | (value << (32 - amount));
+//       out.carry = out.value >> 31;
+//     }
+//     break;
+//   }
+//   return out;
+// }
 
 void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
   // Immediate 2nd Operand flag (0=register, 1=Immediate)
@@ -694,8 +695,8 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
 
       shiftAmount = (instruction >> 7) & 0x1F;
       // Handle shift type
-      shiftResult sr =
-          shiftOperand(rmVal, shiftType, shiftAmount, oldCarry, false);
+      ALUHelper::shiftResult sr = ALUHelper::shiftOperand(
+          rmVal, shiftType, shiftAmount, oldCarry, false);
       op2 = sr.value;
       if (sr.carryUpdated) {
         carryOut = sr.carry;
@@ -720,8 +721,8 @@ void ARMOps::ALU(ARM7TDMI &cpu, uint32_t instruction) {
       shiftAmount = rsVal & 0xFF; // Only take lower 8 bits
 
       // Apply shift type
-      shiftResult sr =
-          shiftOperand(rmVal, shiftType, shiftAmount, oldCarry, true);
+      ALUHelper::shiftResult sr = ALUHelper::shiftOperand(
+          rmVal, shiftType, shiftAmount, oldCarry, true);
       op2 = sr.value;
       carryOut = sr.carry;
     }
@@ -1018,7 +1019,8 @@ void ARMOps::loadStoreWBReg(ARM7TDMI &cpu, uint32_t instruction) {
   uint32_t rmVal = cpu.getLogicalRegister(rm);
   uint8_t oldCarry = (cpu.getCPSR() >> 29) & 0x01;
 
-  shiftResult sr = shiftOperand(rmVal, shiftType, is, oldCarry, false);
+  ALUHelper::shiftResult sr =
+      ALUHelper::shiftOperand(rmVal, shiftType, is, oldCarry, false);
   uint32_t offset = sr.value;
 
   uint32_t effectiveAddr = (!u) ? (baseAddr - offset) : (baseAddr + offset);
