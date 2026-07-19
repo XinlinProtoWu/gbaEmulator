@@ -4,6 +4,7 @@
 #include "memoryBus.h"
 #include <cstdint>
 #include <iostream>
+#include <ostream>
 #include <sys/types.h>
 void THUMBOps::moveShiftedReg(ARM7TDMI &cpu, uint16_t thumbInstr) {
   uint8_t opcode = (thumbInstr >> 11) & 0x03;
@@ -55,6 +56,12 @@ void THUMBOps::addAndSub(ARM7TDMI &cpu, uint16_t thumbInstr) {
   // Source and destination registers only from R0-R7
   uint8_t rs = (thumbInstr >> 3) & 0x07;
   uint8_t rd = thumbInstr & 0x07;
+
+  // Legality Check
+  if (rd > 7 || rs > 7 || operand > 7) {
+    std::cerr << "Register Usage Error in THUMB addAndSub!" << std::endl;
+    return;
+  }
 
   uint32_t rsVal = cpu.getLogicalRegister(rs);
   uint32_t rnVal;
@@ -126,6 +133,12 @@ void THUMBOps::MCASImm(ARM7TDMI &cpu, uint16_t thumbInstr) {
   // 0-255
   uint16_t nn = thumbInstr & 0x0FF;
 
+  // Legality Check
+  if (rd > 7) {
+    std::cerr << "Register Usage Error in THUMB MCASImm!" << std::endl;
+    return;
+  }
+
   uint64_t result = 0;
   uint32_t storedResult = 0;
   uint32_t rdVal = cpu.getLogicalRegister(rd);
@@ -184,7 +197,160 @@ void THUMBOps::MCASImm(ARM7TDMI &cpu, uint16_t thumbInstr) {
 
   cpu.cpsr = newCpsr;
 }
-void THUMBOps::ALU(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+
+void THUMBOps::ALU(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 6) & 0x0F;
+  uint8_t rs = (thumbInstr >> 3) & 0x07;
+  uint8_t rd = thumbInstr & 0x07;
+
+  // Legality Check
+  if (rs > 7 || rd > 7) {
+    std::cerr << "Register Usage Error in THUMB MCASImm!" << std::endl;
+    return;
+  }
+
+  uint64_t result = 0;
+  uint32_t storedResult = 0;
+  uint32_t rsVal = cpu.getLogicalRegister(rs);
+  uint32_t rdVal = cpu.getLogicalRegister(rd);
+
+  uint32_t oldCpsr = cpu.getCPSR();
+  uint8_t carry = (oldCpsr >> 29) & 0x01;
+  uint8_t oldVFlag = (oldCpsr >> 28) & 0x01;
+
+  // Should not write back to Rd if TST, CMP, CMN
+  bool writeBack = true;
+
+  uint8_t carryOut = carry;
+  uint8_t vFlag = oldVFlag;
+
+  switch (opcode) {
+  case 0x0:
+    // AND Rd, Rs
+    storedResult = rdVal & rsVal;
+    break;
+  case 0x1:
+    // EOR Rd, Rs (XOR)
+    storedResult = rdVal ^ rsVal;
+    break;
+  case 0x2:
+    // LSL Rd, Rs (logical shift left)
+  case 0x3:
+    // LSR (logical shift right)
+  case 0x4:
+    // ASR Rd, Rs (arit shift right)
+    // Rd = Rd SAR (Rs AND 0FFh)
+  case 0x7:
+    // ROR Rd, Rs
+    {
+      uint8_t shiftType = 0;
+      if (opcode == 0x2)
+        shiftType = 0x0; // LSL
+      else if (opcode == 0x3)
+        shiftType = 0x1; // LSR
+      else if (opcode == 0x4)
+        shiftType = 0x2; // ASR
+      else if (opcode == 0x7)
+        shiftType = 0x3; // ROR
+
+      // Hardware accurate shift using the bottom byte of Rs
+      ALUHelper::shiftResult sr =
+          ALUHelper::shiftOperand(rdVal, shiftType, rsVal & 0x0FF, carry, true);
+      storedResult = sr.value;
+      carryOut = sr.carryUpdated ? sr.carry : carry;
+      break;
+    }
+  case 0x5:
+    // ADC Rd, Rs (add with carry)
+    result = static_cast<uint64_t>(rdVal) + static_cast<uint64_t>(rsVal) +
+             static_cast<uint64_t>(carry);
+    storedResult = static_cast<uint32_t>(result);
+
+    carryOut = (result >> 32) & 0x01;
+    vFlag = ((~(rdVal ^ rsVal) & (rdVal ^ storedResult)) >> 31) & 0x01;
+    break;
+  case 0x6:
+    // SBC Rd, Rs (sub with carry)
+    result = static_cast<uint64_t>(rdVal) - static_cast<uint64_t>(rsVal) -
+             (carry ? 0 : 1);
+    storedResult = static_cast<uint32_t>(result);
+
+    carryOut = static_cast<uint64_t>(rdVal) >=
+               (static_cast<uint64_t>(rsVal) + (carry ? 0 : 1));
+    vFlag = (((rdVal ^ rsVal) & (rdVal ^ storedResult)) >> 31) & 0x01;
+    break;
+
+  case 0x8:
+    // TST Rd, Rs
+    writeBack = false;
+    storedResult = rdVal & rsVal;
+    break;
+  case 0x9:
+    // NEG Rd, Rs (negate)
+    result = 0x0000000000000000 - static_cast<uint64_t>(rsVal);
+    storedResult = static_cast<uint32_t>(result);
+
+    carryOut = (rsVal == 0); // CY is 1 only if 0 >= rsVal
+    // If the result is somehow the same sign as rs, then it is determined to be
+    // overflow?
+    vFlag = ((rsVal & storedResult) >> 31) & 0x01;
+    break;
+  case 0xA:
+    // CMP Rd, Rs
+    writeBack = false;
+    result = static_cast<uint64_t>(rdVal) - static_cast<uint64_t>(rsVal);
+    storedResult = static_cast<uint32_t>(result);
+
+    carryOut = (rdVal >= rsVal);
+    vFlag = (((rdVal ^ rsVal) & (rdVal ^ storedResult)) >> 31) & 0x01;
+    break;
+  case 0xB:
+    // CMN Rd, Rs
+    writeBack = false;
+    result = static_cast<uint64_t>(rdVal) + static_cast<uint64_t>(rsVal);
+    storedResult = static_cast<uint32_t>(result);
+
+    carryOut = (result >> 32) & 0x01;
+    vFlag = ((~(rdVal ^ rsVal) & (rdVal ^ storedResult)) >> 31) & 0x01;
+    break;
+  case 0xC:
+    // ORR Rd, Rs (orr logical)
+    storedResult = rdVal | rsVal;
+    break;
+  case 0xD:
+    // MUL Rd, Rs (multiply)
+    result = static_cast<uint64_t>(rdVal) * static_cast<uint64_t>(rsVal);
+    storedResult = static_cast<uint32_t>(result);
+    // Carry flag destroyed in ARMv4
+    break;
+  case 0xE:
+    // BIC Rd, Rs (bit clear)
+    storedResult = rdVal & ~rsVal;
+    break;
+  case 0xF:
+    // MVN Rd, Rs (not)
+    storedResult = ~rsVal;
+    break;
+  }
+
+  if (writeBack) {
+    cpu.setLogicalRegister(rd, storedResult);
+  }
+
+  uint32_t newCpsr = cpu.getCPSR() & 0x0FFFFFFF;
+
+  // N bit (Negative or less than)
+  newCpsr |= (storedResult & 0x80000000);
+  // Z bit (Zero or Equal)
+  newCpsr |= (!storedResult) ? 0x40000000 : 0x00000000;
+  // C bit (carry/borrow/extend)
+  newCpsr |= (carryOut) ? 0x20000000 : 0x00000000;
+  // V bit (overflow)
+  newCpsr |= (vFlag) ? 0x10000000 : 0x00000000;
+
+  cpu.cpsr = newCpsr;
+}
+
 void THUMBOps::hiRegOpBE(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadPCRel(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadStoreRelOff(ARM7TDMI &cpu, uint16_t thumbInstr) {}
