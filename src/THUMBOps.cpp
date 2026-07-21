@@ -351,7 +351,95 @@ void THUMBOps::ALU(ARM7TDMI &cpu, uint16_t thumbInstr) {
   cpu.cpsr = newCpsr;
 }
 
-void THUMBOps::hiRegOpBE(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+void THUMBOps::hiRegOpBE(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  // 0: Add, 1: CMP, 2: MOV, 3: BX
+  uint8_t opcode = (thumbInstr >> 8) & 0x03;
+  uint8_t MSBd = (thumbInstr >> 7) & 0x01;
+  uint8_t MSBs = (thumbInstr >> 6) & 0x01;
+  // together with MSBs and MSBd, R0-R15
+  // A reminder that PC is actually referring to current instruction + 4 in
+  // thumb, unlike ARM which is + 8
+  uint8_t rs = ((thumbInstr >> 3) & 0x07) | (MSBs << 3);
+  uint8_t rd = (thumbInstr & 0x07) | (MSBd << 3);
+
+  uint32_t rsVal = cpu.getLogicalRegister(rs);
+  uint32_t rdVal = cpu.getLogicalRegister(rd);
+  uint64_t result = 0;
+  uint32_t storedResult = 0;
+  bool isCMP = false;
+  bool isBX = false;
+
+  uint32_t oldCpsr = cpu.getCPSR();
+  uint8_t carryOut = (oldCpsr >> 29) & 0x01;
+  uint8_t vFlag = (oldCpsr >> 28) & 0x01;
+
+  switch (opcode) {
+  case 0x0:
+    // ADD Rd, Rs
+    result = static_cast<uint64_t>(rdVal) + static_cast<uint64_t>(rsVal);
+    storedResult = static_cast<uint32_t>(result);
+    break;
+  case 0x1:
+    // CMP Rd, Rs
+    isCMP = true;
+    result = static_cast<uint64_t>(rdVal) - static_cast<uint64_t>(rsVal);
+    storedResult = static_cast<uint32_t>(result);
+
+    carryOut = (rdVal >= rsVal);
+    vFlag = (((rdVal ^ rsVal) & (storedResult ^ rdVal)) >> 31) & 0x01;
+    break;
+  case 0x2:
+    // MOV Rd, Rs
+    // NOP gets processed naturally with the instruction MOV R8, R8
+    storedResult = rsVal;
+    break;
+  case 0x3:
+    // BX Rs (no BLX since ARM7TDMI does not have ARM9 instruction sets)
+    isBX = true;
+
+    if (MSBd) {
+      std::cerr << "THUMB BLX Instruction does not exist on ARM7TDMI!"
+                << std::endl;
+      return;
+    }
+
+    // Switch state and update PC
+    if (rsVal & 0x01) {
+      // Switch to THUMB
+      cpu.cpsr |= 0x20;
+      cpu.setLogicalRegister(15, rsVal & ~0x01);
+    } else {
+      // Switch to ARM
+      cpu.cpsr &= ~0x20;
+      cpu.setLogicalRegister(15, rsVal & ~0x03);
+    }
+    cpu.flushPipeline();
+    break;
+  }
+
+  // Writeback should no happen in bx or cmp
+  if (!isBX && !isCMP) {
+    cpu.setLogicalRegister(rd, storedResult);
+    if (rd == 15) {
+      cpu.flushPipeline();
+    }
+  }
+
+  if (isCMP) {
+    uint32_t newCpsr = cpu.getCPSR() & 0x0FFFFFFF;
+
+    // N bit (Negative or less than)
+    newCpsr |= (storedResult & 0x80000000);
+    // Z bit (Zero or Equal)
+    newCpsr |= (!storedResult) ? 0x40000000 : 0x00000000;
+    // C bit (carry/borrow/extend)
+    newCpsr |= (carryOut) ? 0x20000000 : 0x00000000;
+    // V bit (overflow)
+    newCpsr |= (vFlag) ? 0x10000000 : 0x00000000;
+
+    cpu.cpsr = newCpsr;
+  }
+}
 void THUMBOps::loadPCRel(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadStoreRelOff(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadStoreSBHw(ARM7TDMI &cpu, uint16_t thumbInstr) {}
