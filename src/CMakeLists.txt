@@ -11,6 +11,7 @@ add_executable(GBA_Emulator
     ARM7TDMI.cpp 
     memoryBus.cpp 
     ARMOps.cpp 
-    THUMBOps.cpp)
+    THUMBOps.cpp
+    ALUHelpers.cpp)
 target_include_directories(GBA_Emulator PRIVATE ${SDL2_INCLUDE_DIRS})
 target_link_libraries(GBA_Emulator PRIVATE ${SDL2_LIBRARIES})

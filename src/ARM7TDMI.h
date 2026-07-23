@@ -1,5 +1,6 @@
 #ifndef ARM_7_TDMI_H
 #define ARM_7_TDMI_H
+#include "ALUHelpers.h"
 #include <array>
 #include <cstdint>
 
@@ -21,6 +22,7 @@ enum class CpuMode : uint8_t {
 class ARM7TDMI {
   friend class ARMOps;
   friend class THUMBOps;
+  friend uint32_t ALUHelper::rotatedRead(ARM7TDMI &cpu, uint32_t transferAddr);
 
 public:
   ARM7TDMI(MemoryBus &bus);

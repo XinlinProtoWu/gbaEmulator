@@ -21,11 +21,6 @@ void THUMBOps::moveShiftedReg(ARM7TDMI &cpu, uint16_t thumbInstr) {
         << std::endl;
     return;
   }
-  if (rs > 7 || rd > 7) {
-    std::cerr << "Register Usage Error at THUMB move shifted register!"
-              << std::endl;
-    return;
-  }
 
   uint32_t rsVal = cpu.getLogicalRegister(rs);
   uint8_t oldCarry = (cpu.getCPSR() >> 29) & 0x01;
@@ -56,12 +51,6 @@ void THUMBOps::addAndSub(ARM7TDMI &cpu, uint16_t thumbInstr) {
   // Source and destination registers only from R0-R7
   uint8_t rs = (thumbInstr >> 3) & 0x07;
   uint8_t rd = thumbInstr & 0x07;
-
-  // Legality Check
-  if (rd > 7 || rs > 7 || operand > 7) {
-    std::cerr << "Register Usage Error in THUMB addAndSub!" << std::endl;
-    return;
-  }
 
   uint32_t rsVal = cpu.getLogicalRegister(rs);
   uint32_t rnVal;
@@ -133,12 +122,6 @@ void THUMBOps::MCASImm(ARM7TDMI &cpu, uint16_t thumbInstr) {
   // 0-255
   uint16_t nn = thumbInstr & 0x0FF;
 
-  // Legality Check
-  if (rd > 7) {
-    std::cerr << "Register Usage Error in THUMB MCASImm!" << std::endl;
-    return;
-  }
-
   uint64_t result = 0;
   uint32_t storedResult = 0;
   uint32_t rdVal = cpu.getLogicalRegister(rd);
@@ -202,12 +185,6 @@ void THUMBOps::ALU(ARM7TDMI &cpu, uint16_t thumbInstr) {
   uint8_t opcode = (thumbInstr >> 6) & 0x0F;
   uint8_t rs = (thumbInstr >> 3) & 0x07;
   uint8_t rd = thumbInstr & 0x07;
-
-  // Legality Check
-  if (rs > 7 || rd > 7) {
-    std::cerr << "Register Usage Error in THUMB MCASImm!" << std::endl;
-    return;
-  }
 
   uint64_t result = 0;
   uint32_t storedResult = 0;
@@ -440,8 +417,64 @@ void THUMBOps::hiRegOpBE(ARM7TDMI &cpu, uint16_t thumbInstr) {
     cpu.cpsr = newCpsr;
   }
 }
-void THUMBOps::loadPCRel(ARM7TDMI &cpu, uint16_t thumbInstr) {}
-void THUMBOps::loadStoreRelOff(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+
+void THUMBOps::loadPCRel(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  // R0-R7
+  uint8_t rd = (thumbInstr >> 8) & 0x07;
+
+  // Unsigned offset (0-1020 in steps of 4)
+  uint32_t nn = (thumbInstr & 0x0FF) * 4;
+
+  // PC is actually PC + 4 (reminder)
+  // FORCE word alignment by clearing bit 0 and 1
+  uint32_t pc = cpu.getLogicalRegister(15) & ~0x03;
+
+  uint32_t storedResult = cpu.memoryBus.read32(pc + nn);
+  cpu.setLogicalRegister(rd, storedResult);
+}
+void THUMBOps::loadStoreRelOff(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 10) & 0x03;
+  // All registers must be between R0-R7
+  uint8_t ro = (thumbInstr >> 6) & 0x07;
+  uint8_t rb = (thumbInstr >> 3) & 0x07;
+  uint8_t rd = thumbInstr & 0x07;
+
+  // Legality Check
+  if ((thumbInstr >> 9) & 0x01) {
+    std::cerr << "Undefined Instruction! (THUMBOpps::Load/Store Reg Off)"
+              << std::endl;
+    return;
+  }
+
+  uint32_t base = cpu.getLogicalRegister(rb);
+  uint32_t offset = cpu.getLogicalRegister(ro);
+  uint32_t rdVal = cpu.getLogicalRegister(rd);
+
+  uint32_t address = base + offset;
+  uint32_t stored32 = 0;
+  uint32_t stored8 = 0;
+  switch (opcode) {
+  case 0x0:
+    // STR Rd, [Rb, Ro] (store 32)
+    cpu.memoryBus.write32(address & ~0x03, rdVal);
+    break;
+  case 0x1:
+    // STRB Rd, [Rb, Ro] (store 8)
+    cpu.memoryBus.write8(address, static_cast<uint8_t>(rdVal & 0x0FF));
+    break;
+  case 0x2:
+    // LDR Rd, [Rb, Ro] (load 32)
+    stored32 = ALUHelper::rotatedRead(cpu, address);
+    cpu.setLogicalRegister(rd, stored32);
+    break;
+  case 0x3:
+    // LDRB Rd, [Rb, Ro] (load 8)
+    stored8 = cpu.memoryBus.read8(address);
+    cpu.setLogicalRegister(rd, stored8);
+    break;
+  }
+}
+
 void THUMBOps::loadStoreSBHw(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadStoreImmOff(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadStoreHw(ARM7TDMI &cpu, uint16_t thumbInstr) {}
