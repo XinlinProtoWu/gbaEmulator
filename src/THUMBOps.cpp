@@ -432,19 +432,13 @@ void THUMBOps::loadPCRel(ARM7TDMI &cpu, uint16_t thumbInstr) {
   uint32_t storedResult = cpu.memoryBus.read32(pc + nn);
   cpu.setLogicalRegister(rd, storedResult);
 }
+
 void THUMBOps::loadStoreRelOff(ARM7TDMI &cpu, uint16_t thumbInstr) {
   uint8_t opcode = (thumbInstr >> 10) & 0x03;
   // All registers must be between R0-R7
   uint8_t ro = (thumbInstr >> 6) & 0x07;
   uint8_t rb = (thumbInstr >> 3) & 0x07;
   uint8_t rd = thumbInstr & 0x07;
-
-  // Legality Check
-  if ((thumbInstr >> 9) & 0x01) {
-    std::cerr << "Undefined Instruction! (THUMBOpps::Load/Store Reg Off)"
-              << std::endl;
-    return;
-  }
 
   uint32_t base = cpu.getLogicalRegister(rb);
   uint32_t offset = cpu.getLogicalRegister(ro);
@@ -475,7 +469,49 @@ void THUMBOps::loadStoreRelOff(ARM7TDMI &cpu, uint16_t thumbInstr) {
   }
 }
 
-void THUMBOps::loadStoreSBHw(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+void THUMBOps::loadStoreSBHw(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 10) & 0x03;
+  uint8_t ro = (thumbInstr >> 6) & 0x07;
+  uint8_t rb = (thumbInstr >> 3) & 0x07;
+  uint8_t rd = thumbInstr & 0x07;
+
+  uint32_t base = cpu.getLogicalRegister(rb);
+  uint32_t offset = cpu.getLogicalRegister(ro);
+  uint32_t rdVal = cpu.getLogicalRegister(rd);
+
+  uint32_t address = base + offset;
+  uint32_t storedResult = 0;
+
+  switch (opcode) {
+  case 0x0:
+    // STRH Rd, [Rb, Ro] (store 16)
+    cpu.memoryBus.write16(address & ~0x01, static_cast<uint16_t>(rdVal));
+    break;
+  case 0x1: {
+    // LDSB Rd, [Rb, Ro] (load sign-extended 8)
+    uint32_t readResult = cpu.memoryBus.read8(address) & 0x000000FF;
+    // Sign determination by looking at bit 7
+    storedResult = ((readResult >> 7) & 0x01) ? (0xFFFFFF00 | readResult)
+                                              : (0x00000000 | readResult);
+    cpu.setLogicalRegister(rd, storedResult);
+    break;
+  }
+  case 0x2:
+    // LDRH Rd, [Rb, Ro] (load zero-extended 16 bit)
+    storedResult = 0x00000000 | (cpu.memoryBus.read16(address) & 0x0000FFFF);
+    cpu.setLogicalRegister(rd, storedResult);
+    break;
+  case 0x3: {
+    // LDSH Rd, [Rb, Ro] (load sign-extended 16)
+    uint32_t readResult = cpu.memoryBus.read16(address) & 0x0000FFFF;
+    // Sign determination by looking at bit 7
+    storedResult = ((readResult >> 15) & 0x01) ? (0xFFFF0000 | readResult)
+                                               : (0x00000000 | readResult);
+    cpu.setLogicalRegister(rd, storedResult);
+  } break;
+  }
+}
+
 void THUMBOps::loadStoreImmOff(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadStoreHw(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::spRelLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {}
