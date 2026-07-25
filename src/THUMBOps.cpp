@@ -498,22 +498,96 @@ void THUMBOps::loadStoreSBHw(ARM7TDMI &cpu, uint16_t thumbInstr) {
   }
   case 0x2:
     // LDRH Rd, [Rb, Ro] (load zero-extended 16 bit)
-    storedResult = 0x00000000 | (cpu.memoryBus.read16(address) & 0x0000FFFF);
+    storedResult =
+        0x00000000 |
+        (static_cast<uint16_t>(ALUHelper::rotatedRead(cpu, address)) &
+         0x0000FFFF);
     cpu.setLogicalRegister(rd, storedResult);
     break;
   case 0x3: {
     // LDSH Rd, [Rb, Ro] (load sign-extended 16)
-    uint32_t readResult = cpu.memoryBus.read16(address) & 0x0000FFFF;
-    // Sign determination by looking at bit 7
-    storedResult = ((readResult >> 15) & 0x01) ? (0xFFFF0000 | readResult)
-                                               : (0x00000000 | readResult);
+    uint32_t readResult = (address & 0x01)
+                              ? cpu.memoryBus.read8(address) & 0x000000FF
+                              : cpu.memoryBus.read16(address) & 0x0000FFFF;
+    // Sign determination by looking at bit 15 or bit 7 if misaligned
+    if (address & 0x01) {
+      storedResult = ((readResult >> 7) & 0x01) ? (0xFFFFFF00 | readResult)
+                                                : (0x00000000) | readResult;
+    } else {
+      storedResult = ((readResult >> 15) & 0x01) ? (0xFFFF0000 | readResult)
+                                                 : (0x00000000 | readResult);
+    }
     cpu.setLogicalRegister(rd, storedResult);
-  } break;
+    break;
+  }
   }
 }
 
-void THUMBOps::loadStoreImmOff(ARM7TDMI &cpu, uint16_t thumbInstr) {}
-void THUMBOps::loadStoreHw(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+void THUMBOps::loadStoreImmOff(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 11) & 0x03;
+  // Whether this is a byte operation or word operation can be determined
+  // through looking at bit 12.
+  bool isByte = (thumbInstr >> 12) & 0x01;
+  uint32_t nn = (thumbInstr >> 6) & 0x01F;
+  // nn is either 0-31 for byte or 0-124 for word
+  nn = (isByte) ? nn : nn * 4;
+  uint8_t rb = (thumbInstr >> 3) & 0x07;
+  uint8_t rd = thumbInstr & 0x07;
+
+  uint32_t base = cpu.getLogicalRegister(rb);
+  uint32_t rdVal = cpu.getLogicalRegister(rd);
+  uint32_t transferAddr = base + nn;
+  uint32_t storedResult;
+
+  switch (opcode) {
+  case 0x0:
+    // STR Rd, [Rb, #nn]
+    cpu.memoryBus.write32(transferAddr & ~0x03, rdVal);
+    break;
+  case 0x1:
+    // LDR Rd, [Rb, #nn]
+    storedResult = ALUHelper::rotatedRead(cpu, transferAddr);
+    cpu.setLogicalRegister(rd, storedResult);
+    break;
+  case 0x2:
+    // STRB Rd, [Rb, #nn]
+    cpu.memoryBus.write8(transferAddr,
+                         static_cast<uint8_t>(rdVal & 0x000000FF));
+    break;
+  case 0x3:
+    // LDRB Rd, [Rb, #nn]
+    storedResult = static_cast<uint32_t>(cpu.memoryBus.read8(transferAddr));
+    cpu.setLogicalRegister(rd, storedResult);
+    break;
+  }
+}
+void THUMBOps::loadStoreHw(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 11) & 0x01;
+  // Steps of 2 (0-62)
+  uint32_t nn = ((thumbInstr >> 6) & 0x01F) * 2;
+  uint8_t rb = (thumbInstr >> 3) & 0x07;
+  uint8_t rd = thumbInstr & 0x07;
+
+  uint32_t base = cpu.getLogicalRegister(rb);
+  uint32_t rdVal = cpu.getLogicalRegister(rd);
+  uint32_t transferAddr = base + nn;
+  uint32_t storedResult;
+
+  switch (opcode) {
+  case 0x0:
+    // STRH Rd, [Rb, #nn]
+    cpu.memoryBus.write16(transferAddr & ~0x01,
+                          static_cast<uint16_t>(rdVal & 0x0000FFFF));
+    break;
+  case 0x1:
+    // LDRH Rd, [Rb, #nn]
+    storedResult =
+        static_cast<uint16_t>(ALUHelper::rotatedRead(cpu, transferAddr));
+    cpu.setLogicalRegister(rd, storedResult);
+    break;
+  }
+}
+
 void THUMBOps::spRelLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::loadAdr(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::addOffSP(ARM7TDMI &cpu, uint16_t thumbInstr) {}
