@@ -641,7 +641,48 @@ void THUMBOps::addOffSP(ARM7TDMI &cpu, uint16_t thumbInstr) {
   cpu.setLogicalRegister(13, sp);
 }
 
-void THUMBOps::ppReg(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+void THUMBOps::ppReg(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 11) & 0x01;
+  uint8_t pcLr = (thumbInstr >> 8) & 0x01;
+  uint16_t rList = thumbInstr & 0x0FF;
+
+  uint32_t sp = cpu.getLogicalRegister(13);
+
+  if (opcode) {
+    // POP {Rlist}{PC} {load from memory}
+    for (int regIdx = 0; regIdx <= 7; regIdx++) {
+      if ((rList >> regIdx) & 0x01) {
+        cpu.setLogicalRegister(regIdx, cpu.memoryBus.read32(sp & ~0x03));
+        sp += 4;
+      }
+    }
+    if (pcLr) {
+      uint32_t popPC = cpu.memoryBus.read32(sp & ~0x03);
+      sp += 4;
+
+      // ARMv4T ignores the LSB of the loaded address for POP {pc}
+      cpu.setLogicalRegister(15, popPC & ~0x01);
+      // Write into reg13 before flushing pipeline
+      cpu.setLogicalRegister(13, sp);
+      cpu.flushPipeline();
+    }
+  } else {
+    // PUSH {Rlist}{LR} (store in memory)
+    if (pcLr) {
+      sp -= 4;
+      uint32_t lr = cpu.getLogicalRegister(14);
+      cpu.memoryBus.write32(sp & ~0x03, lr);
+    }
+    for (int regIdx = 7; regIdx >= 0; regIdx--) {
+      if ((rList >> regIdx) & 0x01) {
+        sp -= 4;
+        cpu.memoryBus.write32(sp & ~0x03, cpu.getLogicalRegister(regIdx));
+      }
+    }
+  }
+  cpu.setLogicalRegister(13, sp);
+}
+
 void THUMBOps::mulLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::SWI(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::condBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {}
