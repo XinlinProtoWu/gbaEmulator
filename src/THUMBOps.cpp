@@ -588,9 +588,59 @@ void THUMBOps::loadStoreHw(ARM7TDMI &cpu, uint16_t thumbInstr) {
   }
 }
 
-void THUMBOps::spRelLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {}
-void THUMBOps::loadAdr(ARM7TDMI &cpu, uint16_t thumbInstr) {}
-void THUMBOps::addOffSP(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+void THUMBOps::spRelLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 11) & 0x01;
+  uint8_t rd = (thumbInstr >> 8) & 0x07;
+  // Steps of 4 (0-1020)
+  uint32_t nn = (thumbInstr & 0x0FF) * 4;
+
+  uint32_t sp = cpu.getLogicalRegister(13);
+  uint32_t rdVal = cpu.getLogicalRegister(rd);
+  uint32_t storedResult;
+  uint32_t transferAddr = sp + nn;
+
+  switch (opcode) {
+  case 0x0:
+    // STR Rd, [Sp, #nn]
+    cpu.memoryBus.write32(transferAddr & ~0x03, (rdVal));
+    break;
+  case 0x1:
+    // LDR Rd, [Sp, #nn]
+    storedResult = ALUHelper::rotatedRead(cpu, transferAddr);
+    cpu.setLogicalRegister(rd, storedResult);
+    break;
+  }
+}
+
+void THUMBOps::loadAdr(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 11) & 0x01;
+  uint8_t rd = (thumbInstr >> 8) & 0x07;
+  // Steps of 4 (0-1020)
+  uint32_t nn = (thumbInstr & 0x0FF) * 4;
+
+  // Reminder that PC actually stores currently executing address + 4
+  uint32_t pc = cpu.getLogicalRegister(15);
+  uint32_t sp = cpu.getLogicalRegister(13);
+  uint32_t storedResult;
+
+  // Opcode 0: ADD Rd, PC, #nn
+  // Opcode 1: ADD Rd, Sp, #nn
+  storedResult = (opcode) ? (sp + nn) : ((pc & ~0x02) + nn);
+  cpu.setLogicalRegister(rd, storedResult);
+}
+
+void THUMBOps::addOffSP(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 7) & 0x01;
+  // unsigned offset (0-508) steps of 4
+  uint32_t nn = (thumbInstr & 0x07F) * 4;
+
+  uint32_t sp = cpu.getLogicalRegister(13);
+
+  // Opcode 0: ADD SP, #nn 1: ADD SP, #-nn
+  sp = (opcode) ? (sp - nn) : (sp + nn);
+  cpu.setLogicalRegister(13, sp);
+}
+
 void THUMBOps::ppReg(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::mulLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::SWI(ARM7TDMI &cpu, uint16_t thumbInstr) {}
