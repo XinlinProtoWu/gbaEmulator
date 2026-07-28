@@ -683,7 +683,78 @@ void THUMBOps::ppReg(ARM7TDMI &cpu, uint16_t thumbInstr) {
   cpu.setLogicalRegister(13, sp);
 }
 
-void THUMBOps::mulLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+void THUMBOps::mulLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 11) & 0x01;
+  uint8_t rb = (thumbInstr >> 8) & 0x07;
+  uint32_t rlist = thumbInstr & 0x0FF;
+
+  uint32_t rbVal = cpu.getLogicalRegister(rb);
+  uint32_t currentAddr = rbVal;
+
+  bool emptyList = (!rlist);
+  uint32_t finalBaseAddr = rbVal;
+
+  if (emptyList) {
+    rlist = 0x00008000;
+    finalBaseAddr += 0x40;
+  } else {
+    for (int regIdx = 0; regIdx <= 7; regIdx++) {
+      if ((rlist >> regIdx) & 0x01) {
+        finalBaseAddr += 4;
+      }
+    }
+  }
+
+  bool baseIsFirst = true;
+  bool loadedPC = false;
+
+  if (emptyList) {
+    if (opcode) {
+      // LDMIA
+      uint32_t val = cpu.memoryBus.read32(currentAddr & ~0x03);
+      cpu.setLogicalRegister(15, val);
+      loadedPC = true;
+    } else {
+      // STMIA
+      cpu.memoryBus.write32(currentAddr & ~0x03, cpu.getLogicalRegister(15));
+    }
+    currentAddr += 4;
+    baseIsFirst = false;
+  } else {
+    for (int regIdx = 0; regIdx <= 7; regIdx++) {
+      if ((rlist >> regIdx) & 0x01) {
+
+        if (opcode) {
+          // LDMIA load from memory and increment rb
+          uint32_t val = cpu.memoryBus.read32(currentAddr & ~0x03);
+          cpu.setLogicalRegister(regIdx, val);
+        } else {
+          // STMIA store to memory and increment rb
+          uint32_t val = cpu.getLogicalRegister(regIdx);
+          // Writeback quirk if rb is the first in list then store old
+          if (regIdx == rb && !emptyList) {
+            val = baseIsFirst ? rbVal : finalBaseAddr;
+          }
+          cpu.memoryBus.write32(currentAddr & ~0x03, val);
+        }
+        currentAddr += 4;
+        baseIsFirst = false;
+      }
+    }
+  }
+
+  // LDMIA ignores writeback if the base reg was in the load list
+  bool disableWriteback = opcode && (!emptyList && ((thumbInstr >> rb) & 0x01));
+
+  if (!disableWriteback) {
+    cpu.setLogicalRegister(rb, finalBaseAddr);
+  }
+
+  if (loadedPC) {
+    cpu.flushPipeline();
+  }
+}
+
 void THUMBOps::SWI(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::condBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::uncondBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {}
