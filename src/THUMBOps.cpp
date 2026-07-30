@@ -6,6 +6,7 @@
 #include <iostream>
 #include <ostream>
 #include <sys/types.h>
+#include <type_traits>
 void THUMBOps::moveShiftedReg(ARM7TDMI &cpu, uint16_t thumbInstr) {
   uint8_t opcode = (thumbInstr >> 11) & 0x03;
   // Offset (0-31)
@@ -755,7 +756,97 @@ void THUMBOps::mulLoadStore(ARM7TDMI &cpu, uint16_t thumbInstr) {
   }
 }
 
+void THUMBOps::condBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 8) & 0x0F;
+  uint32_t offset = (thumbInstr & 0x0FF);
+  int32_t signedOffset = (offset >> 7 & (0x01)) ? (0xFFFFFF00 | offset) << 1
+                                                : (0x00000000 | offset) << 1;
+  uint8_t vFlag = (cpu.getCPSR() >> 28) & 0x01;
+  uint8_t cFlag = (cpu.getCPSR() >> 29) & 0x01;
+  uint8_t zFlag = (cpu.getCPSR() >> 30) & 0x01;
+  uint8_t nFlag = (cpu.getCPSR() >> 31) & 0x01;
+  // Note that pc stored in R15 is actually pc + 4
+  uint32_t branchAddr = cpu.getLogicalRegister(15) + signedOffset;
+  bool branchTaken = false;
+  switch (opcode) {
+  case 0x0:
+    // BEQ label
+    branchTaken = zFlag;
+    break;
+  case 0x1:
+    // BNE label
+    branchTaken = !zFlag;
+    break;
+  case 0x2:
+    // BCS/BHS label
+    branchTaken = cFlag;
+    break;
+  case 0x3:
+    // BCC/BLO label
+    branchTaken = !cFlag;
+    break;
+  case 0x4:
+    // BMI label
+    branchTaken = nFlag;
+    break;
+  case 0x5:
+    // BPL label
+    branchTaken = !nFlag;
+    break;
+  case 0x6:
+    // BVS label
+    branchTaken = vFlag;
+    break;
+  case 0x7:
+    // BVC label
+    branchTaken = !vFlag;
+    break;
+  case 0x8:
+    // BHI label
+    branchTaken = (cFlag && !zFlag);
+    break;
+  case 0x9:
+    // BLS label
+    branchTaken = (!cFlag || zFlag);
+    break;
+  case 0xA:
+    // BGE label
+    branchTaken = (nFlag == vFlag);
+    break;
+  case 0xB:
+    // BLT label
+    branchTaken = (nFlag != vFlag);
+    break;
+  case 0xC:
+    // BGT label
+    branchTaken = (!zFlag && (nFlag == vFlag));
+    break;
+  case 0xD:
+    // BLE label
+    branchTaken = (zFlag || (nFlag != vFlag));
+    break;
+  case 0xE:
+    std::cerr
+        << "CONDITIONAL BRANCH ERROR: undefined condition, should not be used!"
+        << std::endl;
+    return;
+    break;
+  case 0xF:
+    // SWI is handled in executeTHUMB before condBranch is ever called.
+    // If we reach here, it's a decoding routing error.
+    std::cerr
+        << "CONDITIONAL BRANCH ERROR: SWI (0xF) should not be routed here!"
+        << std::endl;
+    return;
+    break;
+  }
+
+  if (branchTaken) {
+    cpu.setLogicalRegister(15, branchAddr);
+    cpu.flushPipeline();
+  }
+}
+
 void THUMBOps::SWI(ARM7TDMI &cpu, uint16_t thumbInstr) {}
-void THUMBOps::condBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::uncondBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {}
 void THUMBOps::longBranchWLink(ARM7TDMI &cpu, uint16_t thumbInstr) {}
