@@ -2,6 +2,7 @@
 #include "ALUHelpers.h"
 #include "ARM7TDMI.h"
 #include "memoryBus.h"
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <ostream>
@@ -847,6 +848,108 @@ void THUMBOps::condBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {
   }
 }
 
-void THUMBOps::SWI(ARM7TDMI &cpu, uint16_t thumbInstr) {}
-void THUMBOps::uncondBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {}
-void THUMBOps::longBranchWLink(ARM7TDMI &cpu, uint16_t thumbInstr) {}
+/**
+ *void ARMOps::SWI(ARM7TDMI &cpu, uint32_t instruction) {
+  uint32_t comment = instruction & 0x00FFFFFF;
+  const uint32_t pc = cpu.getLogicalRegister(15);
+  uint32_t returnAddr = pc - 4;
+  uint32_t currentCPSR = cpu.getCPSR();
+
+  uint32_t newCPSR = currentCPSR;
+  newCPSR &= ~0x0000003F; // Clear bits 0-5
+  newCPSR |= 0x00000013;  // Supervisor mode;
+  newCPSR |= 0x00000080;  // Set I bit to disable IRQs
+  cpu.cpsr = newCPSR;
+  cpu.updateProcessorMode(0x13);
+  cpu.getCurrentSPSR() = currentCPSR;
+  cpu.setLogicalRegister(14, returnAddr);
+  cpu.setLogicalRegister(15, 0x00000008);
+  cpu.flushPipeline();
+}
+* **/
+void THUMBOps::SWI(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t opcode = (thumbInstr >> 8) & 0x0FF;
+  uint8_t comment = thumbInstr & 0x0FF;
+
+  switch (opcode) {
+  case 0xDF: {
+    // SWI
+    const uint32_t pc = cpu.getLogicalRegister(15);
+    uint32_t returnAddr = pc - 2;
+
+    uint32_t currentCPSR = cpu.getCPSR();
+    uint32_t newCPSR = currentCPSR;
+
+    // Update CPSR Flags
+    newCPSR &= ~0x0000003F;
+    // Set to svc mode first
+    newCPSR |= 0x00000013;
+    // Set the I-bit (bit 7) to disable IRQ
+    newCPSR |= 0x00000080;
+
+    cpu.cpsr = newCPSR;
+    cpu.updateProcessorMode(0x13);
+
+    // Now store pre-exception CPSR into SPSR_svc
+    cpu.getCurrentSPSR() = currentCPSR;
+    cpu.setLogicalRegister(14, returnAddr);
+
+    // Jump to SWI vector
+    cpu.setLogicalRegister(15, 0x00000008);
+    cpu.flushPipeline();
+
+    break;
+  }
+  case 0xBE:
+    // BKPT nn !! DOES NOT EXIST IN ARM4v4T
+    std::cerr << "BKPT Instruction is not supported on ARM7TDMI!" << std::endl;
+    break;
+  default:
+    std::cerr << "Undefined SWI/BKPT Opcode Format" << std::endl;
+    break;
+  }
+}
+
+void THUMBOps::uncondBranch(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint32_t offset = thumbInstr & 0x07FF;
+  int32_t signedOffset = ((offset >> 10) & 0x01) ? (0xFFFFF800 | offset) << 1
+                                                 : (0x00000000 | offset) << 1;
+
+  uint32_t branchAddr = cpu.getLogicalRegister(15) + signedOffset;
+  cpu.setLogicalRegister(15, branchAddr);
+  cpu.flushPipeline();
+}
+
+void THUMBOps::longBranchWLink(ARM7TDMI &cpu, uint16_t thumbInstr) {
+  uint8_t type = (thumbInstr >> 11) & 0x1F;
+  uint32_t nn = thumbInstr & 0x07FF;
+
+  if (type == 0x1E) {
+    // First instruction
+    // LR = PC + 4 + (nn SHL 12)
+    int32_t signedOffset = (nn & 0x0400) ? (0xFFFFF800 | nn) : nn;
+    uint32_t pc = cpu.getLogicalRegister(15);
+
+    cpu.setLogicalRegister(14, pc + (signedOffset << 12));
+
+  } else if (type == 0x1F) {
+    // Second instruction BL label
+    uint32_t lr = cpu.getLogicalRegister(14);
+    uint32_t pc = cpu.getLogicalRegister(15);
+
+    uint32_t targetAddr = lr + (nn << 1);
+
+    // next instruction to store into LR (halfword alligned)
+    uint32_t storedLR = (pc - 2) | 0x1;
+
+    cpu.setLogicalRegister(14, storedLR);
+    cpu.setLogicalRegister(15, targetAddr);
+
+    cpu.flushPipeline();
+  } else if (type == 0x1D) {
+    // Second instruction BLX label !!DOES NOT EXIST in ARM7
+    std::cerr
+        << "LONG BRANCH WITH LINK ERROR: BLX is not supported on ARM7TDMI!"
+        << std::endl;
+  }
+}
