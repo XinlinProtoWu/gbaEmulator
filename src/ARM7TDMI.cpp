@@ -195,6 +195,51 @@ void ARM7TDMI::fillPipeline() {
   physicalRegisters[getPhysicalRegisterIndex(15)] = pc;
 }
 
+bool ARM7TDMI::checkCond(uint8_t cond) const {
+  const bool n = (cpsr & (0x01 << 31));
+  const bool z = (cpsr & (0x01 << 30));
+  const bool c = (cpsr & (0x01 << 29));
+  const bool v = (cpsr & (0x01 << 28));
+
+  switch (cond) {
+  case 0x0: // EQ
+    return z;
+  case 0x1: // NE
+    return !z;
+  case 0x2: // CS / HS
+    return c;
+  case 0x3: // CC / LO
+    return !c;
+  case 0x4: // MI
+    return n;
+  case 0x5: // PL
+    return !n;
+  case 0x6: // VS
+    return v;
+  case 0x7: // VC
+    return !v;
+  case 0x8: // HI
+    return c && !z;
+  case 0x9: // LS
+    return !c || z;
+    ;
+  case 0xA: // GE
+    return n == v;
+  case 0xB: // LT
+    return n != v;
+  case 0xC: // GT
+    return !z && (n == v);
+  case 0xD: // LE
+    return z || (n != v);
+  case 0xE: // AL
+    return true;
+  case 0xF: // NV
+    return false;
+  default:
+    return false;
+  }
+}
+
 void ARM7TDMI::step() {
   // Grab instruction currently in the decode stage (pipeline[0])
   uint32_t currentInstruction = pipeline[0];
@@ -220,6 +265,9 @@ void ARM7TDMI::executeARM(uint32_t instruction) {
   uint8_t cond = (instruction >> 28) & 0xF;
 
   // TODO: Implement a checkCondition(cond) helper
+  if (!checkCond(cond)) {
+    return;
+  }
 
   // Main Instruction Decode bits (25-27)
   uint8_t opcodeGroup = (instruction >> 25) & 0x07;

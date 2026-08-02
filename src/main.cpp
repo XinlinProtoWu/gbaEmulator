@@ -1,5 +1,6 @@
 #include "ARM7TDMI.h"
 #include "memoryBus.h"
+#include <cstdint>
 #include <ios>
 #include <iostream>
 
@@ -18,7 +19,7 @@ int main() {
   // Force jump to Game Pak and resync the pipeline
   cpu.forceJump(0x08000000);
   cpu.initializeGBAState();
-  uint32_t lastPC = 0xffffffff;
+  uint32_t lastExecutingAddr = 0xffffffff;
 
   std::cout << std::hex << "PC=" << cpu.getPC()
             << " instr=" << cpu.getCurrentInstruction()
@@ -27,17 +28,20 @@ int main() {
   while (true) {
     cpu.step();
 
-    uint32_t pc = cpu.getLogicalRegister(15);
+    uint32_t currentModeOffset = (cpu.getCPSR() & 0x20) ? 4 : 8;
+    uint32_t executingAddr = cpu.getLogicalRegister(15) - currentModeOffset;
     std::cout << std::hex << "PC=" << cpu.getPC()
               << " instr=" << cpu.getCurrentInstruction() << std::dec
               << " r12=" << cpu.getLogicalRegister(12) << '\n';
-    if (pc == lastPC) {
+    if (executingAddr == lastExecutingAddr ||
+        cpu.getLogicalRegister(12) == 152) {
       std::cout << std::dec;
       std::cout << "Finished!\n";
       std::cout << "r12 = " << cpu.getLogicalRegister(12) << '\n';
       break;
     }
 
-    lastPC = pc;
+    lastExecutingAddr = executingAddr;
   }
+  return 0;
 }

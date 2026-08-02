@@ -72,6 +72,7 @@ private:
   uint8_t getSPSRIndex();
   void flushPipeline();
   void fillPipeline();
+  bool checkCond(uint8_t cond) const;
 
   void executeARM(uint32_t instruction);
   void executeTHUMB(uint32_t instruction);
